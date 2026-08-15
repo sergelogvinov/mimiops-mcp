@@ -34,7 +34,7 @@ To build this project, you must have the following installed:
 
 - git
 - make
-- golang 1.20+
+- golang 1.26+
 - golangci-lint
 
 endef
@@ -68,7 +68,11 @@ build:
 
 .PHONY: run
 run: ## Run
-	go run $(GO_LDFLAGS) -race ./cmd/mimiops-mcp/main.go -v=5 --metrics-address=:8080
+	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp server --port 8080 --log-level=debug
+
+.PHONY: run-mcp
+run-mcp: ## Run mcp
+	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp mcp --log-level=debug
 
 .PHONY: lint
 lint: ## Lint Code
