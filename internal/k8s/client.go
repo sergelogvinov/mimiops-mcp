@@ -1,3 +1,20 @@
+/*
+Copyright 2025 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Package k8s implements the Kubernetes client for the mimiops-mcp server, including context resolution and impersonation.
 package k8s
 
 import (
@@ -5,6 +22,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 // Config holds Kubernetes client configuration.
@@ -12,6 +30,8 @@ type Config struct {
 	Kubeconfig string
 	Context    string
 	Namespace  string
+	// Impersonate overrides the user to act-as for all requests.
+	Impersonate string
 }
 
 // Client is a Kubernetes clientset plus the resolved identity of the active
@@ -51,6 +71,9 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	overrides := &clientcmd.ConfigOverrides{
 		CurrentContext: cfg.Context,
+		AuthInfo: clientcmdapi.AuthInfo{
+			Impersonate: cfg.Impersonate,
+		},
 	}
 
 	clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
@@ -123,6 +146,14 @@ func resolveContext(loadingRules *clientcmd.ClientConfigLoadingRules, cfg *Confi
 	if namespace == "" {
 		namespace = "default"
 	}
+
+	// Resolve the effective impersonation: flag override wins, else the
+	// kubeconfig AuthInfo.Impersonate.
+	impersonate := cfg.Impersonate
+	if impersonate == "" {
+		impersonate = user.Impersonate
+	}
+	user.Impersonate = impersonate
 
 	return &resolvedIdentity{
 		context:   contextName,

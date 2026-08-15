@@ -1,3 +1,4 @@
+// Package main implements the mimiops-mcp command-line tool.
 package main
 
 import (

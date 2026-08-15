@@ -151,7 +151,7 @@ CLI dispatch uses **`github.com/spf13/cobra`** for the root command and its `mcp
 
 The binary exposes cobra subcommands that select the transport: `server` runs HTTP/SSE, `mcp` runs stdio, plus a `version` helper. This replaces the `--transport` flag with explicit, self-documenting commands. Flags are split into **global (persistent on the root command)** and **per-command**:
 
-- **Global flags** — defined once on the root command with `PersistentFlags()` and inherited by every subcommand: `--kubeconfig`, `--context`, `--namespace`, `--allow-destructive`, `--log-level`.
+- **Global flags** — defined once on the root command with `AddPersistentFlags()` and inherited by every subcommand: `--kubeconfig`, `--context`, `--namespace`, `--impersonate`, `--allow-destructive`, `--log-level`.
 - **Per-command flags** — `--port` is defined only on the `server` command, since it is meaningless for `mcp` (stdio has no listener).
 
 ```bash
@@ -172,11 +172,15 @@ The binary exposes cobra subcommands that select the transport: `server` runs HT
 # Scope to a namespace + enable destructive actions
 ./mimiops-mcp mcp --namespace default --allow-destructive
 ./mimiops-mcp server --namespace default --allow-destructive --log-level debug
+
+# Impersonate a user (overrides kubeconfig act-as)
+./mimiops-mcp mcp --impersonate system:serviceaccount:default:app
+./mimiops-mcp server --impersonate alice --port 8080
 ```
 
 ### Flag wiring (cobra)
 
-- `rootCmd.PersistentFlags()` — global: kubeconfig, context, namespace, allow-destructive, log-level.
+- `rootCmd.PersistentFlags()` — global: kubeconfig, context, namespace, impersonate, allow-destructive, log-level.
 - `serverCmd.Flags()` (local) — `--port`; **not** registered on `mcp`.
 - `version` subcommand — no flags; prints the built-in version.
 
@@ -185,7 +189,7 @@ The binary exposes cobra subcommands that select the transport: `server` runs HT
 ```
 mimiops-mcp
 ├── (global persistent flags)
-│     --kubeconfig, --context, --namespace, --allow-destructive, --log-level
+│     --kubeconfig, --context, --namespace, --impersonate, --allow-destructive, --log-level
 ├── mcp        # Serve the MCP protocol over stdio (inherits global flags)
 ├── server     # Serve the MCP protocol over HTTP SSE (global flags + --port)
 │     --port  # local, server only
@@ -211,9 +215,12 @@ func NewClient(cfg *config.Config) (kubernetes.Interface, error) {
 
     // --context selects the active cluster when the config has multiple contexts;
     // if empty, clientcmd honors the file's current-context.
+    // --impersonate overrides the user to act-as for all requests.
     overrides := &clientcmd.ConfigOverrides{
         CurrentContext: cfg.Context,
-        // Namespace can also ride here via Context.Namespace if set from --namespace
+        AuthInfo: clientcmdapi.AuthInfo{
+            Impersonate: cfg.Impersonate,
+        },
     }
 
     kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
@@ -235,6 +242,8 @@ func NewClient(cfg *config.Config) (kubernetes.Interface, error) {
 
 With multiple cluster configs, `--context` sets the active context via `ConfigOverrides.CurrentContext`; if empty, `clientcmd` uses the file's `current-context`. Namespace resolution also flows through `clientcmd` (`ClientConfig().Namespace()`), honoring any `--namespace` override.
 
+**Impersonation:** `--impersonate <user>` overrides the kubeconfig `AuthInfo.Impersonate` (act-as) for all requests via `ConfigOverrides.AuthInfo.Impersonate`. If unset, the kubeconfig's act-as value is used. The effective impersonation is surfaced in the server startup output.
+
 ---
 
 ### Config struct
@@ -248,6 +257,7 @@ type Config struct {
     Kubeconfig       string   // flag > $KUBECONFIG env > ~/.kube/config
     Context          string   // selects active cluster in multi-cluster kubeconfig
     Namespace        string   // "" means all namespaces
+    Impersonate      string   // overrides kubeconfig act-as user
     Port             int      // server (SSE) only; ignored by mcp
     AllowDestructive bool
     LogLevel         string   // "debug", "info", "warn", "error"
