@@ -133,7 +133,7 @@ module github.com/sergelogvinov/mimiops-mcp
 
 go 1.26
 
-    github.com/go-logr/logr v1.4.4        // Structured logging
+    go.uber.org/zap v1.28.0               // Structured logging
     github.com/spf13/pflag v1.0.10        // Flags
     github.com/spf13/cobra v1.10.2        // CLI command dispatch (mcp / server / version)
 )

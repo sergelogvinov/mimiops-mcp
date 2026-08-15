@@ -7,7 +7,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sergelogvinov/mimiops-mcp/internal/config"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 var (
@@ -31,6 +34,15 @@ func main() {
 
 		os.Exit(1)
 	}
+}
+
+// newLogger builds the zap logger from the parsed config, honoring the
+// --log-level and --log-format flags.
+func newLogger(cfg *config.Config) (*zap.Logger, error) {
+	return logger.New(logger.Options{
+		Level:  logger.Level(cfg.LogLevel),
+		Format: logger.Format(cfg.LogFormat),
+	})
 }
 
 func newRootCmd() *cobra.Command {

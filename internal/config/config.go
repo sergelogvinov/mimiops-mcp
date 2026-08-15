@@ -26,4 +26,5 @@ type Config struct {
 	Port             int
 	AllowDestructive bool
 	LogLevel         string
+	LogFormat        string
 }

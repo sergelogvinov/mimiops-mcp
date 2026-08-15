@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 func newServerCmd(flags *Flags) *cobra.Command {
@@ -28,7 +27,17 @@ func newServerCmd(flags *Flags) *cobra.Command {
 				return err
 			}
 
-			return serveSSE(cmd.Context(), client, cfg)
+			// Build the logger here so an invalid --log-level / --log-format
+			// errors out before we block on the transport.
+			log, err := newLogger(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				_ = log.Sync()
+			}()
+
+			return serveSSE(cmd.Context(), client, cfg, log)
 		},
 	}
 
@@ -37,30 +46,36 @@ func newServerCmd(flags *Flags) *cobra.Command {
 	return cmd
 }
 
-func serveSSE(ctx context.Context, client *k8s.Client, cfg *config.Config) error {
+func serveSSE(ctx context.Context, client *k8s.Client, cfg *config.Config, log *zap.Logger) error {
 	versionInfo, err := client.Discovery().ServerVersion()
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Connected to Kubernetes %s\n", versionInfo.String())
-	fmt.Fprintf(os.Stderr, "  context:   %s\n", client.ContextName)
-	fmt.Fprintf(os.Stderr, "  cluster:   %s\n", client.ClusterName)
-	fmt.Fprintf(os.Stderr, "  namespace: %s\n", client.Namespace)
-	fmt.Fprintf(os.Stderr, "  user:      %s\n", client.User.Name)
+	log.Info("connected to kubernetes",
+		zap.String("version", versionInfo.String()),
+		zap.String("context", client.ContextName),
+		zap.String("cluster", client.ClusterName),
+		zap.String("namespace", client.Namespace),
+		zap.String("user", client.User.Name),
+	)
+
 	if client.User.Username != "" {
-		fmt.Fprintf(os.Stderr, "  username:  %s\n", client.User.Username)
+		log.Debug("kubeconfig basic-auth username", zap.String("username", client.User.Username))
 	}
 	if client.User.HasToken {
-		fmt.Fprintf(os.Stderr, "  auth:      token\n")
+		log.Debug("kubeconfig token auth is in use")
 	}
 	if client.User.Impersonate != "" {
-		fmt.Fprintf(os.Stderr, "  impersonate: %s\n", client.User.Impersonate)
+		log.Info("impersonating",
+			zap.String("user", client.User.Impersonate),
+			zap.Strings("groups", client.User.ImpersonateGroups),
+		)
 	}
-	if len(client.User.ImpersonateGroups) > 0 {
-		fmt.Fprintf(os.Stderr, "  impersonate-groups: %v\n", client.User.ImpersonateGroups)
-	}
-	fmt.Fprintf(os.Stderr, "  serving:   :%d (HTTP/SSE)\n", cfg.Port)
+
+	log.Info("serving mcp over http/sse",
+		zap.Int("port", cfg.Port),
+	)
 
 	// TODO(server): wire the MCP server over HTTP/SSE here, listening on cfg.Port.
 	<-ctx.Done()

@@ -15,6 +15,7 @@ const (
 	flagImpersonate      = "impersonate"
 	flagAllowDestructive = "allow-destructive"
 	flagLogLevel         = "log-level"
+	flagLogFormat        = "log-format"
 	flagPort             = "port"
 
 	envKubeconfig  = "KUBECONFIG"
@@ -22,12 +23,14 @@ const (
 	envNamespace   = "NAMESPACE"
 	envImpersonate = "IMPERSONATE"
 	envLogLevel    = "LOG_LEVEL"
+	envLogFormat   = "LOG_FORMAT"
 	envPort        = "PORT"
 )
 
 const (
-	defaultLogLevel = "info"
-	defaultPort     = 8080
+	defaultLogLevel  = "info"
+	defaultLogFormat = "text"
+	defaultPort      = 8080
 )
 
 // Flags represents the command-line flags for the mimiops-mcp server.
@@ -38,6 +41,7 @@ type Flags struct {
 	Impersonate      string
 	AllowDestructive bool
 	LogLevel         string
+	LogFormat        string
 	Port             int
 }
 
@@ -50,6 +54,7 @@ func DefaultFlags() *Flags {
 		Namespace:   withDefaultEnv(envNamespace, ""),
 		Impersonate: withDefaultEnv(envImpersonate, ""),
 		LogLevel:    withDefaultEnv(envLogLevel, defaultLogLevel),
+		LogFormat:   withDefaultEnv(envLogFormat, defaultLogFormat),
 		Port:        withDefaultEnvInt(envPort, defaultPort),
 	}
 }
@@ -62,6 +67,7 @@ func (f *Flags) AddPersistentFlags(flags *pflag.FlagSet) {
 	flags.StringVarP(&f.Impersonate, flagImpersonate, "", f.Impersonate, "username to impersonate for the operation (default: kubeconfig act-as)")
 	flags.BoolVarP(&f.AllowDestructive, flagAllowDestructive, "", f.AllowDestructive, "allow destructive operations (default: false)")
 	flags.StringVarP(&f.LogLevel, flagLogLevel, "", f.LogLevel, "log level: debug, info, warn, error (default: info)")
+	flags.StringVarP(&f.LogFormat, flagLogFormat, "", f.LogFormat, "log output format: text, json (default: text)")
 }
 
 // AddServerFlags adds the flags for the "server" subcommand.
@@ -79,6 +85,7 @@ func (f *Flags) Config() *config.Config {
 		Port:             f.Port,
 		AllowDestructive: f.AllowDestructive,
 		LogLevel:         f.LogLevel,
+		LogFormat:        f.LogFormat,
 	}
 }
 
