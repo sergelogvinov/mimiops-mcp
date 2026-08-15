@@ -53,19 +53,13 @@ GOOS=linux GOARCH=amd64 make build
 ### Quick dev run (stdio, debug logging)
 
 ```sh
-make run
-```
-
-This is shorthand for:
-
-```sh
-go run ./cmd/mimiops-mcp --log-level=debug
+make run-mcp
 ```
 
 ### Run the MCP binary (stdio)
 
 ```sh
-./bin/mimiops-mcp-arm64 mcp
+make run-mcp
 ```
 
 ### Run as an HTTP/SSE server

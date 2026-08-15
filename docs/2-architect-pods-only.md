@@ -108,7 +108,8 @@ mimiops/
 │   │   ├── client.go            # Factory: creates typed client-go from kubeconfig
 │   │   └── types.go             # Shared response helpers
 │   ├── tools/
-│   │   ├── register.go          # Central tool registration
+│   │   ├── register.go          # Central MCP registration: wires every tool into the server
+│   │   ├── cluster.go           # cluster_name (reports resolved cluster from kubeconfig)
 │   │   ├── pods.go              # pods_list, pods_get, pods_describe
 │   │   ├── pods_log.go          # pods_log (log fetch + container resolution)
 │   │   └── pods_delete.go       # pods_delete (destructive, confirmation flow)
@@ -271,6 +272,19 @@ type Config struct {
 ### 5.1 Read Tools
 
 <details>
+<summary><b>cluster_name</b></summary>
+
+| Field | Value |
+|-------|-------|
+| **name** | `cluster_name` |
+| **description** | Report the name of the connected cluster |
+| **params** | none |
+| **response** | Text: the cluster name resolved from the active kubeconfig context (e.g. `prod`, `kind-dev`). Empty string if the active context has no cluster set. |
+| **RBAC** | none (resolved once at startup from kubeconfig, no cluster read) |
+| **notes** | Implemented in `internal/tools/cluster.go`. Mirrors the `client.ClusterName` value that startup logging already surfaces. |
+</details>
+
+<details>
 <summary><b>pods_list</b></summary>
 
 | Field | Value |
@@ -331,6 +345,88 @@ type Config struct {
 | **flow** | See Section 6. Registered only when `--allow-destructive` is set. |
 | **RBAC** | `delete` pods |
 </details>
+
+### 5.3 MCP Tool Registration & Descriptions (`internal/tools`)
+
+Every tool is a `mark3labs/mcp-go` tool. Its **name** and **description** (plus the JSON schema for its input params) are defined at construction time with `mcp.NewTool(...)` and its option helpers; its **implementation** is the handler registered via `server.AddTool(tool, handler)`. Each tool lives in its own file (`cluster.go`, `pods.go`, `pods_log.go`, `pods_delete.go`) and exposes a `Register*` function. The central `internal/tools/register.go` is the *only* place that names every tool — it calls each `Register*` so the server layer never hard-codes tool names.
+
+```go
+// internal/tools/register.go — central, only place that lists every tool
+package tools
+
+import (
+    "context"
+
+    "github.com/mark3labs/mcp-go/server"
+    "github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+)
+
+// RegisterTools wires every tool into the MCP server. Read tools are always
+// registered; destructive tools are registered only when allowDestructive is set.
+func RegisterTools(srv *server.MCPServer, client *k8s.Client, allowDestructive bool) {
+    RegisterClusterName(srv, client)
+    RegisterPodsList(srv, client)
+    RegisterPodsGet(srv, client)
+    RegisterPodsDescribe(srv, client)
+    RegisterPodsLog(srv, client)
+    if allowDestructive {
+        RegisterPodsDelete(srv, client)
+    }
+}
+```
+
+Each tool file owns its description and its implementation together:
+
+```go
+// internal/tools/pods.go — one tool per file
+package tools
+
+import (
+    "context"
+
+    "github.com/mark3labs/mcp-go/mcp"
+    "github.com/mark3labs/mcp-go/server"
+    "github.com/sergeloginovi/mimiops-mcp/internal/k8s"
+)
+
+// RegisterPodsList adds the pods_list tool: description + schema at construction,
+// implementation in the handler.
+func RegisterPodsList(s *server.MCPServer, client *k8s.Client) {
+    listTool := mcp.NewTool("pods_list",
+        mcp.WithDescription("List pods in a namespace (or all namespaces)."),
+        mcp.WithString("namespace", mcp.Description("namespace; empty = all"), mcp.Required()),
+        mcp.WithString("label_selector", mcp.Description("label selector filter")),
+        mcp.WithString("field_selector", mcp.Description("field selector filter")),
+        mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+    )
+    s.AddTool(listTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+        // implementation: list pods scoped by namespace, format, return
+        return nil, nil
+    })
+}
+```
+
+Key consequences of this layout:
+
+- **Descriptions are discoverable**: `mcp.WithDescription` is what a model sees for each tool; keeping it next to the handler in the tool's own file keeps docs in sync with code.
+- **Registration gating**: the MCP server only advertises tools that are actually registered, so `pods_delete` is *invisible* in `tools/list` unless `--allow-destructive` is set — not merely rejected at call time.
+- **Adding a tool** = add one file + one `Register*` call in `register.go`.
+
+#### `cluster_name` implementation
+
+The resolved cluster name is produced once by `internal/k8s` during `NewClient` (from the active kubeconfig context) and stored on `Client.ClusterName`. `cluster_name` just reports it — no params, no cluster RBAC:
+
+```go
+// internal/tools/cluster.go
+func RegisterClusterName(s *server.MCPServer, client *k8s.Client) {
+    tool := mcp.NewTool("cluster_name",
+        mcp.WithDescription("Return the name of the connected cluster (resolved from the active kubeconfig context)."),
+    )
+    s.AddTool(tool, func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+        return mcp.NewToolResult(mcp.NewTextContent(client.ClusterName)), nil
+    })
+}
+```
 
 ---
 
@@ -413,24 +509,29 @@ kube-system   coredns-xyz789          1/1     Running   0          30d
 ```go
 // internal/k8s/client.go
 
+// Client embeds the typed Kubernetes clientset plus the resolved identity of the
+// active context/cluster/namespace, so callers (and the cluster_name tool) can
+// report *what* they are talking to.
 type Client struct {
-    Typed    kubernetes.Interface   // typed client-go
-    Namespace string                // from --namespace; "" = all
+    kubernetes.Interface
+
+    ContextName string   // resolved active context
+    ClusterName string   // cluster the active context points to (from kubeconfig)
+    Namespace   string   // --namespace > context namespace > "default"
+    User        UserInfo // resolved AuthInfo incl. impersonation
 }
 
-func NewClient(cfg *rest.Config) (*Client, error) {
-    typed, err := kubernetes.NewForConfig(cfg)
-    if err != nil {
-        return nil, err
-    }
-    return &Client{Typed: typed}, nil
+func NewClient(cfg *Config) (*Client, error) {
+    // clientcmd loading rules + overrides → ClientConfig() → kubernetes.NewForConfig
+    // resolveContext(loadingRules, cfg) fills ContextName / ClusterName / Namespace / User
 }
 
-// pods_list      → client.Typed.CoreV1().Pods(ns).List(ctx, opts)
-// pods_get       → client.Typed.CoreV1().Pods(ns).Get(ctx, name, opts)
-// pods_log       → client.Typed.CoreV1().Pods(ns).GetLogs(name, opts).Stream(ctx)
+// pods_list      → client.CoreV1().Pods(ns).List(ctx, opts)
+// pods_get       → client.CoreV1().Pods(ns).Get(ctx, name, opts)
+// pods_log       → client.CoreV1().Pods(ns).GetLogs(name, opts).Stream(ctx)
 // pods_describe  → GET pod + list events for pod UID
-// pods_delete    → client.Typed.CoreV1().Pods(ns).Delete(ctx, name, opts) + grace period
+// pods_delete    → client.CoreV1().Pods(ns).Delete(ctx, name, opts) + grace period
+// cluster_name   → client.ClusterName (resolved at startup, no API call)
 ```
 
 `k8s/dynamic.go` is **not** part of Stage 1. When generic resources are later desired, the dynamic client and `K8s Dynamic Client` section return in a future stage.
@@ -522,6 +623,8 @@ No Helm secrets read, no metrics, no workloads, no jobs/cronjobs in Stage-1 RBAC
 | **Config file** | None, CLI flags only | Keep it simple |
 | **RBAC** | Separate read vs destructive roles | Least privilege |
 | **Events** | Pulled in `pods_describe` per-pod | No separate events tool in Stage 1 |
+| **Tool registration** | Central `internal/tools/register.go`; each tool = description + implementation in its own file (`cluster.go`, `pods.go`, `pods_log.go`, `pods_delete.go`) | Self-documenting, easy to add/extend |
+| **Cluster identity** | `cluster_name` reads `Client.ClusterName` resolved from kubeconfig at startup | No API call or RBAC per call |
 
 ---
 

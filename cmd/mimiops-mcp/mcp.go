@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -34,7 +36,7 @@ func newMcpCmd(flags *Flags) *cobra.Command {
 				return err
 			}
 			defer func() {
-				_ = log.Sync()
+				_ = log.Sync() //nolint:errcheck
 			}()
 
 			return serveStdio(cmd.Context(), client, cfg, log)
@@ -42,7 +44,7 @@ func newMcpCmd(flags *Flags) *cobra.Command {
 	}
 }
 
-func serveStdio(ctx context.Context, client *k8s.Client, cfg *config.Config, log *zap.Logger) error {
+func serveStdio(_ context.Context, client *k8s.Client, cfg *config.Config, log *zap.Logger) error {
 	versionInfo, err := client.Discovery().ServerVersion()
 	if err != nil {
 		return err
@@ -71,8 +73,8 @@ func serveStdio(ctx context.Context, client *k8s.Client, cfg *config.Config, log
 
 	log.Info("serving mcp over stdio")
 
-	// TODO(mcp): wire the MCP server over stdio here.
-	<-ctx.Done()
+	srv := server.NewMCPServer("mimiops-mcp", version)
+	tools.RegisterTools(srv, client, cfg.AllowDestructive)
 
-	return nil
+	return server.ServeStdio(srv)
 }

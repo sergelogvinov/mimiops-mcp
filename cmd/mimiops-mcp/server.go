@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"strconv"
 
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -34,7 +37,7 @@ func newServerCmd(flags *Flags) *cobra.Command {
 				return err
 			}
 			defer func() {
-				_ = log.Sync()
+				_ = log.Sync() //nolint:errcheck
 			}()
 
 			return serveSSE(cmd.Context(), client, cfg, log)
@@ -46,7 +49,7 @@ func newServerCmd(flags *Flags) *cobra.Command {
 	return cmd
 }
 
-func serveSSE(ctx context.Context, client *k8s.Client, cfg *config.Config, log *zap.Logger) error {
+func serveSSE(_ context.Context, client *k8s.Client, cfg *config.Config, log *zap.Logger) error {
 	versionInfo, err := client.Discovery().ServerVersion()
 	if err != nil {
 		return err
@@ -73,12 +76,13 @@ func serveSSE(ctx context.Context, client *k8s.Client, cfg *config.Config, log *
 		)
 	}
 
-	log.Info("serving mcp over http/sse",
-		zap.Int("port", cfg.Port),
-	)
+	log.Info("serving mcp over http/sse", zap.Int("port", cfg.Port))
 
-	// TODO(server): wire the MCP server over HTTP/SSE here, listening on cfg.Port.
-	<-ctx.Done()
+	srv := server.NewMCPServer("mimiops-mcp", version)
+	tools.RegisterTools(srv, client, cfg.AllowDestructive)
 
-	return nil
+	httpOpts := []server.StreamableHTTPOption{}
+	httpServer := server.NewStreamableHTTPServer(srv, httpOpts...)
+
+	return httpServer.Start(":" + strconv.Itoa(cfg.Port))
 }

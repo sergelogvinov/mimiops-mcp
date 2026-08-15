@@ -63,20 +63,6 @@ func New(o Options) (*zap.Logger, error) {
 	return log, nil
 }
 
-// zapLevel maps the option to a zapcore level.
-func (l Level) zapLevel() zapcore.Level {
-	switch l {
-	case Debug:
-		return zapcore.DebugLevel
-	case Warn:
-		return zapcore.WarnLevel
-	case Error:
-		return zapcore.ErrorLevel
-	default:
-		return zapcore.InfoLevel
-	}
-}
-
 // Validate reports whether the level is a known value.
 func (l Level) Validate() error {
 	switch l {
@@ -94,5 +80,21 @@ func (f Format) Validate() error {
 		return nil
 	default:
 		return fmt.Errorf("invalid log format %q: must be one of text, json", f)
+	}
+}
+
+// zapLevel maps the option to a zapcore level.
+func (l Level) zapLevel() zapcore.Level {
+	switch l {
+	case Debug:
+		return zapcore.DebugLevel
+	case Warn:
+		return zapcore.WarnLevel
+	case Error:
+		return zapcore.ErrorLevel
+	case Info:
+		return zapcore.InfoLevel
+	default:
+		return zapcore.InfoLevel
 	}
 }

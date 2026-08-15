@@ -32,7 +32,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, rootCmd.UsageString())
 		}
 
-		os.Exit(1)
+		cancel()
+		os.Exit(1) //nolint:gocritic
 	}
 }
 

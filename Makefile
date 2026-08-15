@@ -68,7 +68,7 @@ build:
 
 .PHONY: run
 run: ## Run
-	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp server --port 8080 --log-level=debug
+	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp server --port 8080 --log-level=debug --allow-destructive
 
 .PHONY: run-mcp
 run-mcp: ## Run mcp
