@@ -1,0 +1,61 @@
+# Kubernetes RBAC Configuration for mimiops-mcp
+# This file defines the permissions required for the mimiops-mcp server
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mimiops-mcp-reader
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mimiops-mcp-reader
+rules:
+# Core read permissions
+- apiGroups: [""]
+  resources: [pods, pods/log, pods/status, pods/metrics]
+  verbs: [get, list, watch]
+- apiGroups: [""]
+  resources: [events, namespaces, nodes, nodes/status, nodes/metrics, persistentvolumeclaims, services, endpoints]
+  verbs: [get, list, watch]
+- apiGroups: ["apps"]
+  resources: [deployments, deployments/status, deployments/scale,
+              statefulsets, statefulsets/status, statefulsets/scale,
+              daemonsets, daemonsets/status]
+  verbs: [get, list, watch]
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [get, list]    # Required by Helm SDK to read release metadata
+  resourceNames: ["sh.helm.release.v1.*"]  # Scope to Helm secrets
+# Metrics
+- apiGroups: ["metrics.k8s.io"]
+  resources: [pods, nodes]
+  verbs: [get, list]
+---
+# Destructive permissions (separate ClusterRole, not bound by default)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mimiops-mcp-destructive
+rules:
+- apiGroups: [""]
+  resources: [pods]
+  verbs: [delete]
+- apiGroups: ["apps"]
+  resources: [deployments, statefulsets, daemonsets]
+  verbs: [patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mimiops-mcp-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mimiops-mcp-reader
+subjects:
+- kind: ServiceAccount
+  name: mimiops-mcp-reader
+  namespace: default
