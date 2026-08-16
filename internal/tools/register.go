@@ -34,9 +34,13 @@ func RegisterTools(srv *server.MCPServer, client *k8s.Client, log *slog.Logger, 
 	RegisterStorageClassesList(srv, client, log)
 	RegisterPriorityClassesList(srv, client, log)
 	RegisterEventsGet(srv, client, log)
+	RegisterWorkloadsList(srv, client, log)
+	RegisterWorkloadsGet(srv, client, log)
+	RegisterWorkloadsDescribe(srv, client, log)
 	if allowDestructive {
 		RegisterPodsDelete(srv, client, log)
 		RegisterCronJobsSuspend(srv, client, log)
 		RegisterCronJobsResume(srv, client, log)
+		RegisterWorkloadsScale(srv, client, log)
 	}
 }

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -52,4 +53,41 @@ func formatAge(created metav1.Time) string {
 		return fmt.Sprintf("%dh", int(diff.Hours()))
 	}
 	return fmt.Sprintf("%dd", int(diff.Hours()/24))
+}
+
+// formatMatchLabels converts match labels to a comma-separated string.
+func formatMatchLabels(labels map[string]string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+
+	var result strings.Builder
+	first := true
+	for k, v := range labels {
+		if !first {
+			result.WriteString(", ")
+		}
+		fmt.Fprintf(&result, "%s=%s", k, v)
+		first = false
+	}
+
+	return result.String()
+}
+
+// extractContainerInfo extracts container information from a pod spec.
+func extractContainerInfo(containers []corev1.Container) []Container {
+	result := make([]Container, 0, len(containers))
+	for _, c := range containers {
+		ports := make([]int32, 0, len(c.Ports))
+		for _, p := range c.Ports {
+			ports = append(ports, p.ContainerPort)
+		}
+		result = append(result, Container{
+			Name:  c.Name,
+			Image: c.Image,
+			Ports: ports,
+			Args:  c.Args,
+		})
+	}
+	return result
 }
