@@ -56,8 +56,6 @@ Perfect. Now I have everything I need. Let me produce the complete, final archit
 │  │  │   workloads_describe                           │  │    │
 │  │  │   helm_list    helm_status   helm_history      │  │    │
 │  │  │   events_list  namespaces_list  nodes_list     │  │    │
-│  │  │   resources_list  resources_describe           │  │    │
-│  │  │   api_versions                                 │  │    │
 │  │  │                                                │  │    │
 │  │  │  Destructive (gated by --allow-destructive):   │  │    │
 │  │  │   pods_delete   rollout_restart                │  │    │
@@ -127,8 +125,7 @@ mimiops-mcp/
 │   │   ├── configmaps.go        # configmaps_list                               
 │   │   ├── helm_tools.go        # helm_list, helm_status, helm_history
 │   │   ├── events.go            # events_list
-│   │   ├── cluster.go           # namespaces_list, nodes_list, api_versions
-│   │   ├── resources.go         # resources_list, resources_describe (dynamic client)
+│   │   ├── cluster.go           # namespaces_list, nodes_list
 │   │   ├── pods_delete.go       # pods_delete (destructive)
 │   │   ├── jobs_delete.go       # jobs_delete (destructive)                    
 │   │   └── rollout.go           # rollout_restart (destructive)
@@ -460,40 +457,6 @@ type Config struct {
 | **response** | Table: name, status, roles, age, version |
 </details>
 
-<details>
-<summary><b>resources_list</b></summary>
-
-| Field | Value |
-|-------|-------|
-| **name** | `resources_list` |
-| **description** | List any resource type by GVK |
-| **params** | `api_version` (required, e.g. `"batch/v1"`), `kind` (required, e.g. `"CronJob"`), `namespace` (optional), `label_selector` (optional), `format` (optional, default: `"text"`) |
-| **response** | Table of resources |
-| **notes** | Uses `client-go/dynamic` client to handle any GVK at runtime |
-</details>
-
-<details>
-<summary><b>resources_describe</b></summary>
-
-| Field | Value |
-|-------|-------|
-| **name** | `resources_describe` |
-| **description** | Describe any resource by GVK + name |
-| **params** | `api_version` (required), `kind` (required), `name` (required), `namespace` (optional), `format` (optional, default: `"text"`) |
-| **response** | Rich describe of the resource |
-</details>
-
-<details>
-<summary><b>api_versions</b></summary>
-
-| Field | Value |
-|-------|-------|
-| **name** | `api_versions` |
-| **description** | List available API versions and resource kinds |
-| **params** | None |
-| **response** | Structured list of API groups → versions → kinds |
-</details>
-
 ### 5.2 Destructive Tools
 
 <details>
@@ -682,29 +645,6 @@ func NewHelmClient(kubeConfig *rest.Config) (*HelmClient, error) {
 ```
 
 Key detail: Helm stores release metadata in Kubernetes Secrets (labeled `owner: helm`). The SDK reads these. The kubeconfig user needs `list` + `get` on Secrets in the relevant namespace, or a broad enough RBAC.
-
----
-
-## 9. K8s Dynamic Client for Generic Resources
-
-```go
-// internal/k8s/dynamic.go
-
-// resources_list and resources_describe use the dynamic client
-// to handle any GVK at runtime without compile-time type registration.
-
-func ListResources(dynamicClient dynamic.Interface, apiVersion, kind, namespace, labelSelector string) ([]unstructured.Unstructured, error) {
-    gv, _ := schema.ParseGroupVersion(apiVersion)
-    gvr := schema.GroupVersionResource{
-        Group:    gv.Group,
-        Version:  gv.Version,
-        Resource: pluralize(kind), // e.g., "CronJob" → "cronjobs"
-    }
-    
-    // Use discovery client to map Kind → Resource name
-    // Then list via dynamicClient.Resource(gvr).Namespace(namespace).List(...)
-}
-```
 
 ---
 

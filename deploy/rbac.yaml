@@ -13,26 +13,34 @@ kind: ClusterRole
 metadata:
   name: mimiops-mcp-reader
 rules:
-# Core read permissions
+# Pods — Stage 1 (unchanged) — also used by nodes tools for allocated-resource sums
 - apiGroups: [""]
-  resources: [pods, pods/log, pods/status, pods/metrics]
+  resources: [pods, pods/log, pods/status]
   verbs: [get, list, watch]
+# Jobs + CronJobs — Stage 2 (unchanged)
+- apiGroups: ["batch"]
+  resources: [jobs, jobs/status, cronjobs, cronjobs/status]
+  verbs: [get, list, watch]
+# Nodes + Namespaces — Stage 3 (NEW)
 - apiGroups: [""]
-  resources: [events, namespaces, nodes, nodes/status, nodes/metrics, persistentvolumeclaims, services, endpoints]
+  resources: [nodes, nodes/status, namespaces, namespaces/status]
   verbs: [get, list, watch]
-- apiGroups: ["apps"]
-  resources: [deployments, deployments/status, deployments/scale,
-              statefulsets, statefulsets/status, statefulsets/scale,
-              daemonsets, daemonsets/status]
-  verbs: [get, list, watch]
+# ResourceQuotas + LimitRanges — Stage 3 (NEW, namespaced)
 - apiGroups: [""]
-  resources: [secrets]
-  verbs: [get, list]    # Required by Helm SDK to read release metadata
-  resourceNames: ["sh.helm.release.v1.*"]  # Scope to Helm secrets
-# Metrics
-- apiGroups: ["metrics.k8s.io"]
-  resources: [pods, nodes]
-  verbs: [get, list]
+  resources: [resourcequotas, resourcequotas/status, limitranges]
+  verbs: [get, list, watch]
+# StorageClasses — Stage 3 (NEW, storage.k8s.io/v1)
+- apiGroups: ["storage.k8s.io"]
+  resources: [storageclasses]
+  verbs: [get, list, watch]
+# PriorityClasses — Stage 3 (NEW, scheduling.k8s.io/v1)
+- apiGroups: ["scheduling.k8s.io"]
+  resources: [priorityclasses]
+  verbs: [get, list, watch]
+# Events — Stage 3 (NEW, core/v1)
+- apiGroups: [""]
+  resources: [events]
+  verbs: [get, list, watch]
 ---
 # Destructive permissions (separate ClusterRole, not bound by default)
 apiVersion: rbac.authorization.k8s.io/v1
