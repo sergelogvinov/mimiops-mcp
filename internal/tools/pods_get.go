@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -14,7 +15,7 @@ import (
 )
 
 // RegisterPodsGet adds the pods_get tool, which gets a full pod spec and status.
-func RegisterPodsGet(s *server.MCPServer, client *k8s.Client) {
+func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("pods_get",
 		mcp.WithDescription("Get full pod spec and status."),
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
@@ -36,6 +37,11 @@ func RegisterPodsGet(s *server.MCPServer, client *k8s.Client) {
 		if format != "text" && format != "json" {
 			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
 		}
+
+		log.DebugContext(ctx, "pods_get called",
+			"namespace", namespace,
+			"pod", name,
+		)
 
 		pod, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {

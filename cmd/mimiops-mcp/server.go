@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -9,7 +10,6 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 )
 
 func newServerCmd(flags *Flags) *cobra.Command {
@@ -36,9 +36,6 @@ func newServerCmd(flags *Flags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer func() {
-				_ = log.Sync() //nolint:errcheck
-			}()
 
 			return serveSSE(cmd.Context(), client, cfg, log)
 		},
@@ -49,37 +46,42 @@ func newServerCmd(flags *Flags) *cobra.Command {
 	return cmd
 }
 
-func serveSSE(_ context.Context, client *k8s.Client, cfg *config.Config, log *zap.Logger) error {
+func serveSSE(_ context.Context, client *k8s.Client, cfg *config.Config, log *slog.Logger) error {
 	versionInfo, err := client.Discovery().ServerVersion()
 	if err != nil {
 		return err
 	}
 
 	log.Info("connected to kubernetes",
-		zap.String("version", versionInfo.String()),
-		zap.String("context", client.ContextName),
-		zap.String("cluster", client.ClusterName),
-		zap.String("namespace", client.Namespace),
-		zap.String("user", client.User.Name),
+		"version", versionInfo.String(),
+		"context", client.ContextName,
+		"cluster", client.ClusterName,
+		"namespace", client.Namespace,
+		"user", client.User.Name,
 	)
 
 	if client.User.Username != "" {
-		log.Debug("kubeconfig basic-auth username", zap.String("username", client.User.Username))
+		log.Debug("kubeconfig basic-auth username", "username", client.User.Username)
 	}
 	if client.User.HasToken {
 		log.Debug("kubeconfig token auth is in use")
 	}
 	if client.User.Impersonate != "" {
 		log.Info("impersonating",
-			zap.String("user", client.User.Impersonate),
-			zap.Strings("groups", client.User.ImpersonateGroups),
+			"user", client.User.Impersonate,
+			"groups", client.User.ImpersonateGroups,
 		)
 	}
 
-	log.Info("serving mcp over http/sse", zap.Int("port", cfg.Port))
+	log.Info("serving mcp over http/stream", "port", cfg.Port)
 
-	srv := server.NewMCPServer("mimiops-mcp", version)
-	tools.RegisterTools(srv, client, cfg.AllowDestructive)
+	opts := []server.ServerOption{
+		server.WithToolCapabilities(true),
+		server.WithLogger(log),
+	}
+
+	srv := server.NewMCPServer("mimiops-mcp", version, opts...)
+	tools.RegisterTools(srv, client, log, cfg.AllowDestructive)
 
 	httpOpts := []server.StreamableHTTPOption{}
 	httpServer := server.NewStreamableHTTPServer(srv, httpOpts...)

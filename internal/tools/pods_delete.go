@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -11,9 +12,9 @@ import (
 )
 
 // RegisterPodsDelete adds the pods_delete tool, which deletes a pod.
-func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client) {
+func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("pods_delete",
-		mcp.WithDescription("Delete a pod."),
+		mcp.WithDescription("Delete or restart a pod."),
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithInteger("grace_period_seconds", mcp.Description("grace period in seconds"), mcp.DefaultNumber(30)),
@@ -32,6 +33,13 @@ func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client) {
 
 		gracePeriodSeconds := req.GetInt("grace_period_seconds", 30)
 		confirm := req.GetBool("confirm", false)
+
+		log.DebugContext(ctx, "pods_delete called",
+			"namespace", namespace,
+			"pod", name,
+			"grace_period_seconds", gracePeriodSeconds,
+			"confirm", confirm,
+		)
 
 		// Check if destructive operations are allowed
 		// This should be checked at registration time via allowDestructive flag

@@ -1,12 +1,11 @@
-// Package logger provides the shared zap-based structured logger used across
+// Package logger provides the shared slog-based structured logger used across
 // the mimiops-mcp server.
 package logger
 
 import (
 	"fmt"
-
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"log/slog"
+	"os"
 )
 
 // Level is the severity threshold derived from the --log-level flag.
@@ -35,9 +34,9 @@ type Options struct {
 	Format Format
 }
 
-// New builds a zap logger writing to stderr with the configured level and
+// New builds a slog logger writing to stderr with the configured level and
 // encoder. Caller is captured so logs show the source line.
-func New(o Options) (*zap.Logger, error) {
+func New(o Options) (*slog.Logger, error) {
 	if err := o.Level.Validate(); err != nil {
 		return nil, err
 	}
@@ -45,22 +44,20 @@ func New(o Options) (*zap.Logger, error) {
 		return nil, err
 	}
 
-	cfg := zap.NewProductionConfig()
-	cfg.Level = zap.NewAtomicLevelAt(o.Level.zapLevel())
+	opts := &slog.HandlerOptions{
+		Level: o.Level.slogLevel(),
+	}
 
+	// All hook output goes to stderr. In stdio mode, stdout is the JSON-RPC transport,
+	// writing to stdout from hooks corrupts the protocol stream.
+	var handler slog.Handler
 	if o.Format == Text {
-		cfg.Encoding = "console"
-		cfg.EncoderConfig = zap.NewDevelopmentEncoderConfig()
+		handler = slog.NewTextHandler(os.Stderr, opts)
 	} else {
-		cfg.Encoding = "json"
+		handler = slog.NewJSONHandler(os.Stderr, opts)
 	}
 
-	log, err := cfg.Build(zap.AddCaller())
-	if err != nil {
-		return nil, fmt.Errorf("build logger: %w", err)
-	}
-
-	return log, nil
+	return slog.New(handler), nil
 }
 
 // Validate reports whether the level is a known value.
@@ -83,18 +80,18 @@ func (f Format) Validate() error {
 	}
 }
 
-// zapLevel maps the option to a zapcore level.
-func (l Level) zapLevel() zapcore.Level {
+// slogLevel maps the option to a slog.Level.
+func (l Level) slogLevel() slog.Level {
 	switch l {
 	case Debug:
-		return zapcore.DebugLevel
+		return slog.LevelDebug
 	case Warn:
-		return zapcore.WarnLevel
+		return slog.LevelWarn
 	case Error:
-		return zapcore.ErrorLevel
+		return slog.LevelError
 	case Info:
-		return zapcore.InfoLevel
+		return slog.LevelInfo
 	default:
-		return zapcore.InfoLevel
+		return slog.LevelInfo
 	}
 }

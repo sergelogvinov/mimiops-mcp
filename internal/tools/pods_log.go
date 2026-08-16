@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,6 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const defaultContainerAnnotation = "kubectl.kubernetes.io/default-container"
+
 // LogLine represents a single log line with timestamp.
 type LogLine struct {
 	Timestamp time.Time `json:"timestamp"`
@@ -20,7 +23,7 @@ type LogLine struct {
 }
 
 // RegisterPodsLog adds the pods_log tool, which fetches pod logs.
-func RegisterPodsLog(s *server.MCPServer, client *k8s.Client) {
+func RegisterPodsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("pods_log",
 		mcp.WithDescription("Fetch pod logs."),
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
@@ -52,43 +55,33 @@ func RegisterPodsLog(s *server.MCPServer, client *k8s.Client) {
 			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
 		}
 
+		log.DebugContext(ctx, "pods_log called",
+			"namespace", namespace,
+			"pod", name,
+			"container", container,
+			"tail", tail,
+			"previous", previous,
+			"since_seconds", sinceSeconds,
+		)
+
 		// Get pod to check container names
 		pod, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return mcp.NewToolResultErrorf("failed to get pod '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		// If container is omitted, check for kubectl.kubernetes.io/default-container annotation
-		// If not found and pod has multiple containers, return error listing available containers
 		if container == "" {
-			// Check for default container annotation
-			if defaultContainer, ok := pod.Annotations["kubectl.kubernetes.io/default-container"]; ok {
-				container = defaultContainer
-			} else if len(pod.Spec.Containers) > 1 {
-				var containerNames []string
-				for _, c := range pod.Spec.Containers {
-					containerNames = append(containerNames, c.Name)
-				}
-				return mcp.NewToolResultErrorf("pod has multiple containers. Specify one of: %v, or set kubectl.kubernetes.io/default-container annotation", containerNames), nil
-			} else {
+			if len(pod.Spec.Containers) == 1 {
 				container = pod.Spec.Containers[0].Name
 			}
-		}
-
-		// Validate container exists
-		containerFound := false
-		for _, c := range pod.Spec.Containers {
-			if c.Name == container {
-				containerFound = true
-				break
+			if pod.Annotations != nil {
+				if defaultContainer, ok := pod.Annotations[defaultContainerAnnotation]; ok && defaultContainer != "" {
+					container = defaultContainer
+				}
 			}
-		}
-		if !containerFound {
-			var containerNames []string
-			for _, c := range pod.Spec.Containers {
-				containerNames = append(containerNames, c.Name)
+			if len(pod.Spec.Containers) > 0 {
+				container = pod.Spec.Containers[0].Name
 			}
-			return mcp.NewToolResultErrorf("container '%s' not found. Available containers: %v", container, containerNames), nil
 		}
 
 		// Get log options - convert int to int64

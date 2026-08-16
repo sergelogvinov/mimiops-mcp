@@ -72,7 +72,7 @@ run: ## Run
 
 .PHONY: run-mcp
 run-mcp: ## Run mcp
-	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp mcp --log-level=debug
+	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp mcp --log-level=debug --allow-destructive
 
 .PHONY: lint
 lint: ## Lint Code
@@ -84,6 +84,10 @@ unit: ## Unit Tests
 
 .PHONY: test
 test: lint unit ## Run all tests
+
+.PHONY: install
+install: build
+	cp ./bin/mimiops-mcp-$(ARCH) ~/go/bin/mimiops-mcp
 
 .PHONY: licenses
 licenses:

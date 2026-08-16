@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -15,7 +16,7 @@ import (
 )
 
 // RegisterPodsList adds the pods_list tool, which lists pods in a namespace (or all namespaces).
-func RegisterPodsList(s *server.MCPServer, client *k8s.Client) {
+func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("pods_list",
 		mcp.WithDescription("List pods in a namespace (or all namespaces)."),
 		mcp.WithString("namespace", mcp.Description("namespace; empty = all namespaces"), mcp.Required()),
@@ -38,6 +39,12 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client) {
 		if format != "text" && format != "json" {
 			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
 		}
+
+		log.DebugContext(ctx, "pods_list called",
+			"namespace", namespace,
+			"label_selector", labelSelector,
+			"field_selector", fieldSelector,
+		)
 
 		// Use metav1.NamespaceAll for empty namespace (all namespaces)
 		ns := namespace

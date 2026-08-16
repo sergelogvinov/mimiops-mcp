@@ -56,13 +56,7 @@ GOOS=linux GOARCH=amd64 make build
 make run-mcp
 ```
 
-### Run the MCP binary (stdio)
-
-```sh
-make run-mcp
-```
-
-### Run as an HTTP/SSE server
+### Run as an HTTP/SSE server (debug logging)
 
 ```sh
 make run
