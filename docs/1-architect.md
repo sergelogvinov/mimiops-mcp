@@ -162,8 +162,6 @@ require (
     k8s.io/metrics v0.35.0                // Metrics (pods_top, nodes_top)
     
     helm.sh/helm/v3 v3.21.3               // Helm SDK
-    
-    github.com/go-logr/logr v1.4.3        // Structured logging
 
     github.com/spf13/pflag v1.0.10         // Flags monipulation
     github.com/spf13/cobra v1.10.2         // For cli commands

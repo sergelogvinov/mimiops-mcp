@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -96,7 +95,7 @@ func formatPodsListText(pods []corev1.Pod) string {
 	buf.WriteString("|-----------|------|-------|--------|----------|-----|------|\n")
 
 	for _, pod := range pods {
-		age := formatAge(pod.CreationTimestamp.Time)
+		age := formatAge(pod.CreationTimestamp)
 		ready := formatReady(pod.Status)
 		node := pod.Spec.NodeName
 		if node == "" {
@@ -148,23 +147,6 @@ func formatReady(status corev1.PodStatus) string {
 	return fmt.Sprintf("%d/%d", ready, total)
 }
 
-// formatAge calculates the age from creation time.
-func formatAge(created time.Time) string {
-	now := time.Now()
-	diff := now.Sub(created)
-
-	if diff < time.Minute {
-		return "0s"
-	}
-	if diff < time.Hour {
-		return fmt.Sprintf("%dm", int(diff.Minutes()))
-	}
-	if diff < 24*time.Hour {
-		return fmt.Sprintf("%dh", int(diff.Hours()))
-	}
-	return fmt.Sprintf("%dd", int(diff.Hours()/24))
-}
-
 // containerRestartCount returns the total restart count for all containers in the pod.
 func containerRestartCount(status corev1.PodStatus) int32 {
 	total := int32(0)
@@ -177,7 +159,7 @@ func containerRestartCount(status corev1.PodStatus) int32 {
 // toPodSummary converts a pod to a PodSummary.
 func toPodSummary(pod corev1.Pod) PodSummary {
 	ready := formatReady(pod.Status)
-	age := formatAge(pod.CreationTimestamp.Time)
+	age := formatAge(pod.CreationTimestamp)
 	node := pod.Spec.NodeName
 	if node == "" {
 		node = "<pending>"

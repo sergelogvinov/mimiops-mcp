@@ -75,7 +75,7 @@ func formatPodDescribeText(pod *corev1.Pod) string {
 	fmt.Fprintf(&buf, "**Status:** %s\n", pod.Status.Phase)
 	fmt.Fprintf(&buf, "**Ready:** %s\n", formatReady(pod.Status))
 	fmt.Fprintf(&buf, "**Restarts:** %d\n", containerRestartCount(pod.Status))
-	fmt.Fprintf(&buf, "**Age:** %s\n", formatAge(pod.CreationTimestamp.Time))
+	fmt.Fprintf(&buf, "**Age:** %s\n", formatAge(pod.CreationTimestamp))
 
 	// Containers
 	fmt.Fprintf(&buf, "\n### Containers\n\n")

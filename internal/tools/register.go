@@ -15,7 +15,17 @@ func RegisterTools(srv *server.MCPServer, client *k8s.Client, log *slog.Logger, 
 	RegisterPodsGet(srv, client, log)
 	RegisterPodsDescribe(srv, client, log)
 	RegisterPodsLog(srv, client, log)
+	RegisterJobsList(srv, client, log)
+	RegisterJobsGet(srv, client, log)
+	RegisterJobsDescribe(srv, client, log)
+	RegisterJobsLog(srv, client, log)
+	RegisterJobsCreate(srv, client, log)
+	RegisterCronJobsList(srv, client, log)
+	RegisterCronJobsGet(srv, client, log)
+	RegisterCronJobsDescribe(srv, client, log)
 	if allowDestructive {
 		RegisterPodsDelete(srv, client, log)
+		RegisterCronJobsSuspend(srv, client, log)
+		RegisterCronJobsResume(srv, client, log)
 	}
 }

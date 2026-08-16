@@ -14,8 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const defaultContainerAnnotation = "kubectl.kubernetes.io/default-container"
-
 // LogLine represents a single log line with timestamp.
 type LogLine struct {
 	Timestamp time.Time `json:"timestamp"`

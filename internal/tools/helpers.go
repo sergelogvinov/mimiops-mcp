@@ -1,9 +1,14 @@
 package tools
 
 import (
+	"fmt"
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const defaultContainerAnnotation = "kubectl.kubernetes.io/default-container"
 
 // ownerReferences extracts the pod's owner references as simplified structs.
 func ownerReferences(pod *corev1.Pod) []OwnerReference {
@@ -30,4 +35,21 @@ func ownerReferencesMeta(pod *metav1.PartialObjectMetadata) []OwnerReference {
 		})
 	}
 	return refs
+}
+
+// formatAge calculates the age from creation time.
+func formatAge(created metav1.Time) string {
+	now := time.Now()
+	diff := now.Sub(created.Time)
+
+	if diff < time.Minute {
+		return "0s"
+	}
+	if diff < time.Hour {
+		return fmt.Sprintf("%dm", int(diff.Minutes()))
+	}
+	if diff < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(diff.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(diff.Hours()/24))
 }
