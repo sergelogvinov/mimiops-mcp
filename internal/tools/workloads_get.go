@@ -1,12 +1,10 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
+	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -14,15 +12,27 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 )
 
+// WorkloadGetResult represents the result of getting a workload.
+type WorkloadGetResult struct {
+	WorkloadSummary
+
+	Labels      map[string]string `json:"labels" jsonschema:"Labels of the Workload"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the Workload"`
+}
+
 // RegisterWorkloadsGet adds the workloads_get tool, which gets a single workload's
 // full spec and status (Deployment, StatefulSet, or DaemonSet).
 func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("workloads_get",
-		mcp.WithDescription("Get a single workload's full spec and status (Deployment, StatefulSet, or DaemonSet)."),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("Get Workload"),
+		mcp.WithDescription("Get a single workload's full spec and status (Deployment, StatefulSet, or DaemonSet)"),
 		mcp.WithString("name", mcp.Description("workload name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[WorkloadGetResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -38,11 +48,6 @@ func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		kind := req.GetString("kind", "")
 		if kind != "" && kind != "deployment" && kind != "statefulset" && kind != "daemonset" {
 			return mcp.NewToolResultErrorf("invalid parameter 'kind': must be one of deployment, statefulset, daemonset"), nil
-		}
-
-		format := req.GetString("format", "text")
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
 		}
 
 		log.DebugContext(ctx, "workloads_get called",
@@ -63,221 +68,71 @@ func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			return mcp.NewToolResultErrorf("failed to get %s '%s' in namespace '%s': %v", resolvedKind, name, namespace, err), nil
 		}
 
-		result, err := formatWorkloadGet(workload, resolvedKind, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
-		}
+		result := buildWorkloadGetResult(workload)
+		fallbackText := fmt.Sprintf("%s '%s' in namespace '%s' has %s replicas ready/desired. Age: %s.",
+			result.Kind, result.Name, result.Namespace, result.Ready, result.Age)
 
-		return mcp.NewToolResultText(result), nil
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
-// formatWorkloadGet formats a workload for MCP tool output.
-func formatWorkloadGet(workload any, kind string, format string) (string, error) {
-	if format == "json" {
-		return formatWorkloadGetJSON(workload, kind)
+// buildWorkloadGetResult builds a WorkloadGetResult from a workload object.
+func buildWorkloadGetResult(workload any) *WorkloadGetResult {
+	result := &WorkloadGetResult{
+		Labels:      make(map[string]string),
+		Annotations: make(map[string]string),
 	}
-	return formatWorkloadGetText(workload, kind), nil
-}
-
-// formatWorkloadGetText formats a workload's detailed information as key-value blocks.
-func formatWorkloadGetText(workload any, kind string) string {
-	var buf bytes.Buffer
 
 	switch w := workload.(type) {
 	case *appsv1.Deployment:
-		fmt.Fprintf(&buf, "**KIND:** %s\n", kind)
-		fmt.Fprintf(&buf, "**NAME:** %s\n", w.Name)
-		fmt.Fprintf(&buf, "**NAMESPACE:** %s\n", w.Namespace)
-		fmt.Fprintf(&buf, "**SERVICE:** %s\n", w.Name) // Service name typically matches deployment name
-		fmt.Fprintf(&buf, "**REPLICAS:** %s\n", formatDeploymentReady(*w))
-		fmt.Fprintf(&buf, "**SELECTOR:** %s\n", formatMatchLabels(w.Spec.Selector.MatchLabels))
-		fmt.Fprintf(&buf, "**UPDATE STRATEGY:** %s\n", w.Spec.Strategy.Type)
-		if w.Spec.Strategy.Type == appsv1.RollingUpdateDeploymentStrategyType {
-			fmt.Fprintf(&buf, "  - Rolling Update:\n")
-			if w.Spec.Strategy.RollingUpdate != nil {
-				if w.Spec.Strategy.RollingUpdate.MaxSurge != nil {
-					fmt.Fprintf(&buf, "    - Max Surge: %v\n", w.Spec.Strategy.RollingUpdate.MaxSurge)
-				}
-				if w.Spec.Strategy.RollingUpdate.MaxUnavailable != nil {
-					fmt.Fprintf(&buf, "    - Max Unavailable: %v\n", w.Spec.Strategy.RollingUpdate.MaxUnavailable)
-				}
-			}
-		}
-		fmt.Fprintf(&buf, "**AGE:** %s\n", formatAge(w.CreationTimestamp))
+		result.WorkloadSummary = toWorkloadSummaryDeployment(*w)
+		maps.Copy(result.Labels, w.Labels)
+		maps.Copy(result.Annotations, w.Annotations)
 
-		// Containers
-		buf.WriteString("\n### Containers\n\n")
-		for _, container := range w.Spec.Template.Spec.Containers {
-			fmt.Fprintf(&buf, "- **%s**: image=%s", container.Name, container.Image)
-			if len(container.Ports) > 0 {
-				ports := make([]string, len(container.Ports))
-				for i, p := range container.Ports {
-					ports[i] = fmt.Sprintf("%d", p.ContainerPort)
-				}
-				fmt.Fprintf(&buf, ", ports=%s", joinStrings(ports))
-			}
-			fmt.Fprintf(&buf, "\n")
-		}
-
-		// Conditions
-		if len(w.Status.Conditions) > 0 {
-			fmt.Fprintf(&buf, "\n### Conditions\n\n")
-			for _, cond := range w.Status.Conditions {
-				fmt.Fprintf(&buf, "- **%s**: %s (%s)\n", cond.Type, cond.Status, cond.Reason)
-			}
-		}
+		// result.Replicas = Replicas{
+		// 	Ready:   int(w.Status.ReadyReplicas),
+		// 	Desired: int(*w.Spec.Replicas),
+		// }
+		// result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
+		// result.Service = w.Name
+		// result.Strategy = string(w.Spec.Strategy.Type)
+		// result.Age = formatAge(w.CreationTimestamp)
+		// result.Spec = buildSpecMap(w.Spec)
+		// result.Status = buildStatusMap(w.Status)
 
 	case *appsv1.StatefulSet:
-		fmt.Fprintf(&buf, "**KIND:** %s\n", kind)
-		fmt.Fprintf(&buf, "**NAME:** %s\n", w.Name)
-		fmt.Fprintf(&buf, "**NAMESPACE:** %s\n", w.Namespace)
-		fmt.Fprintf(&buf, "**SERVICE:** %s\n", w.Spec.ServiceName)
-		fmt.Fprintf(&buf, "**REPLICAS:** %s\n", formatStatefulSetReady(*w))
-		fmt.Fprintf(&buf, "**SELECTOR:** %s\n", formatMatchLabels(w.Spec.Selector.MatchLabels))
-		fmt.Fprintf(&buf, "**UPDATE STRATEGY:** %s\n", w.Spec.UpdateStrategy.Type)
-		if w.Spec.UpdateStrategy.Type == appsv1.RollingUpdateStatefulSetStrategyType {
-			fmt.Fprintf(&buf, "  - Rolling Update:\n")
-			if w.Spec.UpdateStrategy.RollingUpdate != nil {
-				fmt.Fprintf(&buf, "    - Partition: %d\n", w.Spec.UpdateStrategy.RollingUpdate.Partition)
-			}
-		}
-		fmt.Fprintf(&buf, "**AGE:** %s\n", formatAge(w.CreationTimestamp))
+		result.WorkloadSummary = toWorkloadSummaryStatefulSet(*w)
+		maps.Copy(result.Labels, w.Labels)
+		maps.Copy(result.Annotations, w.Annotations)
 
-		// Containers
-		fmt.Fprintf(&buf, "\n### Containers\n\n")
-		for _, container := range w.Spec.Template.Spec.Containers {
-			fmt.Fprintf(&buf, "- **%s**: image=%s", container.Name, container.Image)
-			if len(container.Ports) > 0 {
-				ports := make([]string, len(container.Ports))
-				for i, p := range container.Ports {
-					ports[i] = fmt.Sprintf("%d", p.ContainerPort)
-				}
-				fmt.Fprintf(&buf, ", ports=%s", joinStrings(ports))
-			}
-			fmt.Fprintf(&buf, "\n")
-		}
-
-		// Conditions
-		if len(w.Status.Conditions) > 0 {
-			fmt.Fprintf(&buf, "\n### Conditions\n\n")
-			for _, cond := range w.Status.Conditions {
-				fmt.Fprintf(&buf, "- **%s**: %s (%s)\n", cond.Type, cond.Status, cond.Reason)
-			}
-		}
+		// result.Replicas = Replicas{
+		// 	Ready:   int(w.Status.ReadyReplicas),
+		// 	Desired: int(*w.Spec.Replicas),
+		// }
+		// result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
+		// result.Service = w.Spec.ServiceName
+		// result.Strategy = string(w.Spec.UpdateStrategy.Type)
+		// result.Age = formatAge(w.CreationTimestamp)
+		// result.Spec = buildSpecMap(w.Spec)
+		// result.Status = buildStatusMap(w.Status)
 
 	case *appsv1.DaemonSet:
-		fmt.Fprintf(&buf, "**KIND:** %s\n", kind)
-		fmt.Fprintf(&buf, "**NAME:** %s\n", w.Name)
-		fmt.Fprintf(&buf, "**NAMESPACE:** %s\n", w.Namespace)
-		fmt.Fprintf(&buf, "**REPLICAS:** %s\n", formatDaemonSetReady(*w))
-		fmt.Fprintf(&buf, "**SELECTOR:** %s\n", formatMatchLabels(w.Spec.Selector.MatchLabels))
-		fmt.Fprintf(&buf, "**UPDATE STRATEGY:** %s\n", w.Spec.UpdateStrategy.Type)
-		if w.Spec.UpdateStrategy.Type == appsv1.RollingUpdateDaemonSetStrategyType {
-			fmt.Fprintf(&buf, "  - Rolling Update:\n")
-			if w.Spec.UpdateStrategy.RollingUpdate != nil {
-				fmt.Fprintf(&buf, "    - Max Unavailable: %v\n", w.Spec.UpdateStrategy.RollingUpdate.MaxUnavailable)
-			}
-		}
-		fmt.Fprintf(&buf, "**AGE:** %s\n", formatAge(w.CreationTimestamp))
+		result.WorkloadSummary = toWorkloadSummaryDaemonSet(*w)
+		maps.Copy(result.Labels, w.Labels)
+		maps.Copy(result.Annotations, w.Annotations)
 
-		// Containers
-		fmt.Fprintf(&buf, "\n### Containers\n\n")
-		for _, container := range w.Spec.Template.Spec.Containers {
-			fmt.Fprintf(&buf, "- **%s**: image=%s", container.Name, container.Image)
-			if len(container.Ports) > 0 {
-				ports := make([]string, len(container.Ports))
-				for i, p := range container.Ports {
-					ports[i] = fmt.Sprintf("%d", p.ContainerPort)
-				}
-				fmt.Fprintf(&buf, ", ports=%s", joinStrings(ports))
-			}
-			fmt.Fprintf(&buf, "\n")
-		}
-
-		// Conditions
-		if len(w.Status.Conditions) > 0 {
-			fmt.Fprintf(&buf, "\n### Conditions\n\n")
-			for _, cond := range w.Status.Conditions {
-				fmt.Fprintf(&buf, "- **%s**: %s (%s)\n", cond.Type, cond.Status, cond.Reason)
-			}
-		}
+		// result.Replicas = Replicas{
+		// 	Ready:   int(w.Status.NumberReady),
+		// 	Desired: int(w.Status.DesiredNumberScheduled),
+		// }
+		// result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
+		// result.Strategy = string(w.Spec.UpdateStrategy.Type)
+		// result.Age = formatAge(w.CreationTimestamp)
+		// result.Spec = buildSpecMap(w.Spec)
+		// result.Status = buildStatusMap(w.Status)
 	}
 
-	return buf.String()
-}
-
-// formatWorkloadGetJSON formats a workload as JSON.
-func formatWorkloadGetJSON(workload any, _ string) (string, error) {
-	var details WorkloadDetails
-
-	switch w := workload.(type) {
-	case *appsv1.Deployment:
-		details = buildWorkloadDetails("deployment", w)
-	case *appsv1.StatefulSet:
-		details = buildWorkloadDetails("statefulset", w)
-	case *appsv1.DaemonSet:
-		details = buildWorkloadDetails("daemonset", w)
-	}
-
-	data, err := json.MarshalIndent(details, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// buildWorkloadDetails builds a WorkloadDetails from a workload object.
-func buildWorkloadDetails(kind string, workload any) WorkloadDetails {
-	var details WorkloadDetails
-
-	switch w := workload.(type) {
-	case *appsv1.Deployment:
-		details.Kind = kind
-		details.Namespace = w.Namespace
-		details.Name = w.Name
-		details.Replicas = Replicas{
-			Ready:   int(w.Status.ReadyReplicas),
-			Desired: int(*w.Spec.Replicas),
-		}
-		details.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
-		details.Service = w.Name
-		details.Strategy = string(w.Spec.Strategy.Type)
-		details.Age = formatAge(w.CreationTimestamp)
-		details.Spec = buildSpecMap(w.Spec)
-		details.Status = buildStatusMap(w.Status)
-
-	case *appsv1.StatefulSet:
-		details.Kind = kind
-		details.Namespace = w.Namespace
-		details.Name = w.Name
-		details.Replicas = Replicas{
-			Ready:   int(w.Status.ReadyReplicas),
-			Desired: int(*w.Spec.Replicas),
-		}
-		details.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
-		details.Service = w.Spec.ServiceName
-		details.Strategy = string(w.Spec.UpdateStrategy.Type)
-		details.Age = formatAge(w.CreationTimestamp)
-		details.Spec = buildSpecMap(w.Spec)
-		details.Status = buildStatusMap(w.Status)
-
-	case *appsv1.DaemonSet:
-		details.Kind = kind
-		details.Namespace = w.Namespace
-		details.Name = w.Name
-		details.Replicas = Replicas{
-			Ready:   int(w.Status.NumberReady),
-			Desired: int(w.Status.DesiredNumberScheduled),
-		}
-		details.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
-		details.Strategy = string(w.Spec.UpdateStrategy.Type)
-		details.Age = formatAge(w.CreationTimestamp)
-		details.Spec = buildSpecMap(w.Spec)
-		details.Status = buildStatusMap(w.Status)
-	}
-
-	return details
+	return result
 }
 
 // buildSpecMap builds a map representation of a workload spec.
@@ -343,18 +198,4 @@ func buildStatusMap(status any) map[string]any {
 		return result
 	}
 	return nil
-}
-
-// joinStrings joins a slice of strings with a comma and space.
-func joinStrings(strs []string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	var result strings.Builder
-	result.WriteString(strs[0])
-	for i := 1; i < len(strs); i++ {
-		result.WriteString(", ")
-		result.WriteString(strs[i])
-	}
-	return result.String()
 }

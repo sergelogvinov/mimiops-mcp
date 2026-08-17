@@ -125,46 +125,51 @@ func listAllWorkloads(ctx context.Context, client *k8s.Client, namespace string,
 
 // toWorkloadSummary converts a Deployment to a WorkloadSummary.
 func toWorkloadSummaryDeployment(deployment appsv1.Deployment) WorkloadSummary {
-	ready := formatDeploymentReady(deployment)
-	age := formatAge(deployment.CreationTimestamp)
-
 	return WorkloadSummary{
 		Kind:      "deployment",
 		Namespace: deployment.Namespace,
 		Name:      deployment.Name,
-		Ready:     ready,
+		Ready:     formatDeploymentReady(deployment),
 		Desired:   int(*deployment.Spec.Replicas),
-		Age:       age,
+		Age:       formatAge(deployment.CreationTimestamp),
 	}
 }
 
 // toWorkloadSummary converts a StatefulSet to a WorkloadSummary.
 func toWorkloadSummaryStatefulSet(statefulset appsv1.StatefulSet) WorkloadSummary {
-	ready := formatStatefulSetReady(statefulset)
-	age := formatAge(statefulset.CreationTimestamp)
-
 	return WorkloadSummary{
 		Kind:      "statefulset",
 		Namespace: statefulset.Namespace,
 		Name:      statefulset.Name,
-		Ready:     ready,
+		Ready:     formatStatefulSetReady(statefulset),
 		Desired:   int(*statefulset.Spec.Replicas),
-		Age:       age,
+		Age:       formatAge(statefulset.CreationTimestamp),
 	}
 }
 
 // toWorkloadSummary converts a DaemonSet to a WorkloadSummary.
 func toWorkloadSummaryDaemonSet(daemonset appsv1.DaemonSet) WorkloadSummary {
-	ready := formatDaemonSetReady(daemonset)
-	age := formatAge(daemonset.CreationTimestamp)
-
 	return WorkloadSummary{
 		Kind:      "daemonset",
 		Namespace: daemonset.Namespace,
 		Name:      daemonset.Name,
-		Ready:     ready,
+		Ready:     formatDaemonSetReady(daemonset),
 		Desired:   int(daemonset.Status.DesiredNumberScheduled),
-		Age:       age,
+		Age:       formatAge(daemonset.CreationTimestamp),
+	}
+}
+
+// toWorkloadSummary converts a workload object to a WorkloadSummary based on its kind.
+func toWorkloadSummary(workload any) WorkloadSummary {
+	switch w := workload.(type) {
+	case *appsv1.Deployment:
+		return toWorkloadSummaryDeployment(*w)
+	case *appsv1.StatefulSet:
+		return toWorkloadSummaryStatefulSet(*w)
+	case *appsv1.DaemonSet:
+		return toWorkloadSummaryDaemonSet(*w)
+	default:
+		return WorkloadSummary{}
 	}
 }
 

@@ -1,9 +1,7 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -13,20 +11,29 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// WorkloadsListResult represents the result of listing workloads.
+type WorkloadsListResult struct {
+	Workloads []WorkloadSummary `json:"workloads" jsonschema:"List of workloads"`
+}
+
 // RegisterWorkloadsList adds the workloads_list tool, which lists Deployments,
 // StatefulSets, or DaemonSets in a namespace (or all namespaces).
 func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("workloads_list",
-		mcp.WithDescription("List Deployments, StatefulSets, or DaemonSets in a namespace (or all namespaces)."),
-		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("List Workloads"),
+		mcp.WithDescription("List Deployments, StatefulSets, or DaemonSets in a namespace (or all namespaces)"),
+		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[WorkloadsListResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
-			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
+			namespace = metav1.NamespaceAll
 		}
 
 		kind := req.GetString("kind", "")
@@ -35,10 +42,6 @@ func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 		}
 
 		labelSelector := req.GetString("label_selector", "")
-		format := req.GetString("format", "text")
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
 
 		log.DebugContext(ctx, "workloads_list called",
 			"namespace", namespace,
@@ -50,34 +53,38 @@ func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 		var err error
 
 		if kind != "" {
-			// List specific kind
-			summaries, err = listWorkloadsByKindAndFormat(ctx, client, namespace, kind, labelSelector)
+			summaries, err = listWorkloadsByKind(ctx, client, namespace, kind, labelSelector)
 		} else {
-			// List all kinds
 			summaries, err = listAllWorkloads(ctx, client, namespace, labelSelector)
 		}
-
 		if err != nil {
 			return mcp.NewToolResultErrorf("failed to list workloads in namespace '%s': %v", namespace, err), nil
 		}
 
-		result, err := formatWorkloadsList(summaries, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
+		result := WorkloadsListResult{
+			Workloads: summaries,
 		}
 
-		return mcp.NewToolResultText(result), nil
+		// Build fallback text
+		var fallbackText string
+		switch len(result.Workloads) {
+		case 0:
+			fallbackText = "No workloads found."
+		case 1:
+			fallbackText = fmt.Sprintf("Found 1 workload: %s (%s) in namespace %s", result.Workloads[0].Name, result.Workloads[0].Kind, result.Workloads[0].Namespace)
+		default:
+			fallbackText = fmt.Sprintf("Found %d workloads", len(result.Workloads))
+		}
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
-// listWorkloadsByKindAndFormat lists workloads of a specific kind.
-func listWorkloadsByKindAndFormat(ctx context.Context, client *k8s.Client, namespace, kind string, labelSelector string) ([]WorkloadSummary, error) {
-	opts := metav1.ListOptions{}
-	if labelSelector != "" {
-		opts.LabelSelector = labelSelector
+// listWorkloadsByKind lists workloads of a specific kind.
+func listWorkloadsByKind(ctx context.Context, client *k8s.Client, namespace, kind string, labelSelector string) (summaries []WorkloadSummary, err error) {
+	opts := metav1.ListOptions{
+		LabelSelector: labelSelector,
 	}
-
-	var summaries []WorkloadSummary
 
 	switch kind {
 	case "deployment":
@@ -107,50 +114,4 @@ func listWorkloadsByKindAndFormat(ctx context.Context, client *k8s.Client, names
 	}
 
 	return summaries, nil
-}
-
-// formatWorkloadsList formats a list of workloads for MCP tool output.
-func formatWorkloadsList(summaries []WorkloadSummary, format string) (string, error) {
-	if format == "json" {
-		return formatWorkloadsListJSON(summaries)
-	}
-	return formatWorkloadsListText(summaries), nil
-}
-
-// formatWorkloadsListText formats a list of workloads as a markdown table.
-func formatWorkloadsListText(summaries []WorkloadSummary) string {
-	if len(summaries) == 0 {
-		return "No workloads found."
-	}
-
-	var buf bytes.Buffer
-	buf.WriteString("| KIND | NAMESPACE | NAME | READY | DESIRED | AGE |\n")
-	buf.WriteString("|------|-----------|------|-------|---------|-----|\n")
-
-	for _, w := range summaries {
-		fmt.Fprintf(&buf, "| %s | %s | %s | %s | %d | %s |\n",
-			w.Kind,
-			w.Namespace,
-			w.Name,
-			w.Ready,
-			w.Desired,
-			w.Age,
-		)
-	}
-
-	return buf.String()
-}
-
-// formatWorkloadsListJSON formats a list of workloads as JSON.
-func formatWorkloadsListJSON(summaries []WorkloadSummary) (string, error) {
-	result := struct {
-		Workloads []WorkloadSummary `json:"workloads"`
-	}{
-		Workloads: summaries,
-	}
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }

@@ -1,9 +1,7 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -14,42 +12,39 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// PodsListResult represents the result of listing pods.
+type PodsListResult struct {
+	Pods []PodSummary `json:"pods" jsonschema:"List of pods"`
+}
+
 // RegisterPodsList adds the pods_list tool, which lists pods in a namespace (or all namespaces).
 func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("pods_list",
-		mcp.WithDescription("List pods in a namespace (or all namespaces)."),
-		mcp.WithString("namespace", mcp.Description("namespace; empty = all namespaces"), mcp.Required()),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("List Pods"),
+		mcp.WithDescription("List pods in a namespace (or all namespaces)"),
+		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
 		mcp.WithString("field_selector", mcp.Description("field selector filter")),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[PodsListResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Parse parameters
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
-			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
+			namespace = metav1.NamespaceAll
 		}
 
 		labelSelector := req.GetString("label_selector", "")
 		fieldSelector := req.GetString("field_selector", "")
-		format := req.GetString("format", "text")
-
-		// Validate format
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
 
 		log.DebugContext(ctx, "pods_list called",
 			"namespace", namespace,
 			"label_selector", labelSelector,
 			"field_selector", fieldSelector,
 		)
-
-		// Use metav1.NamespaceAll for empty namespace (all namespaces)
-		ns := namespace
-		if ns == "" {
-			ns = metav1.NamespaceAll
-		}
 
 		// Build list options
 		opts := metav1.ListOptions{}
@@ -61,78 +56,33 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		}
 
 		// List pods
-		pods, err := client.CoreV1().Pods(ns).List(ctx, opts)
+		pods, err := client.CoreV1().Pods(namespace).List(ctx, opts)
 		if err != nil {
-			return mcp.NewToolResultErrorf("failed to list pods in namespace '%s': %v", ns, err), nil
+			return mcp.NewToolResultErrorf("failed to list pods in namespace '%s': %v", namespace, err), nil
 		}
 
-		// Format output
-		result, err := formatPodsList(pods.Items, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
+		result := PodsListResult{
+			Pods: make([]PodSummary, 0, len(pods.Items)),
 		}
 
-		return mcp.NewToolResultText(result), nil
+		// Build result
+		for _, pod := range pods.Items {
+			result.Pods = append(result.Pods, toPodSummary(pod))
+		}
+
+		// Build fallback text
+		var fallbackText string
+		switch len(result.Pods) {
+		case 0:
+			fallbackText = "No pods found."
+		case 1:
+			fallbackText = fmt.Sprintf("Found 1 pod: %s in namespace %s (%s)", result.Pods[0].Name, result.Pods[0].Namespace, result.Pods[0].Status)
+		default:
+			fallbackText = fmt.Sprintf("Found %d pods", len(result.Pods))
+		}
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
-}
-
-// formatPodsList formats a list of pods for MCP tool output.
-func formatPodsList(pods []corev1.Pod, format string) (string, error) {
-	if format == "json" {
-		return formatPodsListJSON(pods)
-	}
-	return formatPodsListText(pods), nil
-}
-
-// formatPodsListText formats a list of pods as a markdown table.
-func formatPodsListText(pods []corev1.Pod) string {
-	if len(pods) == 0 {
-		return "No pods found."
-	}
-
-	var buf bytes.Buffer
-	buf.WriteString("| NAMESPACE | NAME | READY | STATUS | RESTARTS | AGE | NODE |\n")
-	buf.WriteString("|-----------|------|-------|--------|----------|-----|------|\n")
-
-	for _, pod := range pods {
-		age := formatAge(pod.CreationTimestamp)
-		ready := formatReady(pod.Status)
-		node := pod.Spec.NodeName
-		if node == "" {
-			node = "<pending>"
-		}
-
-		fmt.Fprintf(&buf, "| %s | %s | %s | %s | %d | %s | %s |\n",
-			pod.Namespace,
-			pod.Name,
-			ready,
-			pod.Status.Phase,
-			containerRestartCount(pod.Status),
-			age,
-			node,
-		)
-	}
-
-	return buf.String()
-}
-
-// formatPodsListJSON formats a list of pods as JSON.
-func formatPodsListJSON(pods []corev1.Pod) (string, error) {
-	summaries := make([]PodSummary, 0, len(pods))
-	for _, pod := range pods {
-		summaries = append(summaries, toPodSummary(pod))
-	}
-
-	result := struct {
-		Pods []PodSummary `json:"pods"`
-	}{
-		Pods: summaries,
-	}
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 // formatReady extracts the ready status from pod status.
@@ -158,8 +108,6 @@ func containerRestartCount(status corev1.PodStatus) int32 {
 
 // toPodSummary converts a pod to a PodSummary.
 func toPodSummary(pod corev1.Pod) PodSummary {
-	ready := formatReady(pod.Status)
-	age := formatAge(pod.CreationTimestamp)
 	node := pod.Spec.NodeName
 	if node == "" {
 		node = "<pending>"
@@ -168,10 +116,10 @@ func toPodSummary(pod corev1.Pod) PodSummary {
 	return PodSummary{
 		Namespace:       pod.Namespace,
 		Name:            pod.Name,
-		Ready:           ready,
+		Ready:           formatReady(pod.Status),
 		Status:          string(pod.Status.Phase),
 		Restarts:        containerRestartCount(pod.Status),
-		Age:             age,
+		Age:             formatAge(pod.CreationTimestamp),
 		Node:            node,
 		OwnerReferences: ownerReferences(&pod),
 	}

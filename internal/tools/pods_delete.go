@@ -11,14 +11,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// PodDeleteResult represents the result of deleting a pod.
+type PodDeleteResult struct {
+	Name      string `json:"name" jsonschema:"Name of the deleted pod"`
+	Namespace string `json:"namespace" jsonschema:"Namespace of the deleted pod"`
+	Deleted   bool   `json:"deleted" jsonschema:"Whether the pod was successfully deleted"`
+}
+
 // RegisterPodsDelete adds the pods_delete tool, which deletes a pod.
 func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("pods_delete",
-		mcp.WithDescription("Delete or restart a pod."),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithToolTitle("Delete Pod"),
+		mcp.WithDescription("Delete a pod"),
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithInteger("grace_period_seconds", mcp.Description("grace period in seconds"), mcp.DefaultNumber(30)),
 		mcp.WithBoolean("confirm", mcp.Description("set to true to confirm deletion"), mcp.DefaultBool(false)),
+		mcp.WithOutputSchema[PodDeleteResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -45,10 +57,13 @@ func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		// This should be checked at registration time via allowDestructive flag
 		// But we also check here as a safety measure
 		if !confirm {
-			return mcp.NewToolResultErrorf(
-				"This will delete pod '%s' in namespace '%s'. Call again with confirm=true to proceed.",
-				name, namespace,
-			), nil
+			result := PodDeleteResult{
+				Name:      name,
+				Namespace: namespace,
+				Deleted:   false,
+			}
+			fallbackText := fmt.Sprintf("This will delete pod '%s' in namespace '%s'. Call again with confirm=true to proceed.", name, namespace)
+			return mcp.NewToolResultStructured(result, fallbackText), nil
 		}
 
 		// Delete the pod - convert int to int64
@@ -60,6 +75,13 @@ func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 			return mcp.NewToolResultErrorf("failed to delete pod '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Pod '%s' in namespace '%s' deleted successfully.", name, namespace)), nil
+		result := PodDeleteResult{
+			Name:      name,
+			Namespace: namespace,
+			Deleted:   true,
+		}
+		fallbackText := fmt.Sprintf("Pod '%s' in namespace '%s' deleted successfully.", name, namespace)
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }

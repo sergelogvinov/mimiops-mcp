@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -15,10 +14,7 @@ import (
 
 // ScaleResult represents the result of a scale operation.
 type ScaleResult struct {
-	Kind      string `json:"kind"`
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	Replicas  int    `json:"replicas"`
+	WorkloadSummary
 }
 
 // RegisterWorkloadsScale adds the workloads_scale tool, which scales a Deployment
@@ -26,13 +22,17 @@ type ScaleResult struct {
 // --allow-destructive flag to be enabled.
 func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("workloads_scale",
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithToolTitle("Scale Workload"),
 		mcp.WithDescription("Scale a Deployment or StatefulSet to a target replica count. This is a destructive action."),
 		mcp.WithString("name", mcp.Description("workload name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithInteger("replicas", mcp.Description("target replica count, min: 0"), mcp.Required()),
-		mcp.WithString("kind", mcp.Description("kind: deployment or statefulset"), mcp.Enum("deployment", "statefulset")),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithString("kind", mcp.Description("kind: deployment or statefulset"), mcp.Required(), mcp.Enum("deployment", "statefulset")),
 		mcp.WithBoolean("confirm", mcp.Description("set to true to confirm the scale operation"), mcp.DefaultBool(false)),
+		mcp.WithOutputSchema[ScaleResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -51,13 +51,8 @@ func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client, log *slog.L
 		}
 
 		kind := req.GetString("kind", "")
-		if kind != "" && kind != "deployment" && kind != "statefulset" {
+		if kind != "deployment" && kind != "statefulset" {
 			return mcp.NewToolResultErrorf("invalid parameter 'kind': must be one of deployment, statefulset"), nil
-		}
-
-		format := req.GetString("format", "text")
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
 		}
 
 		confirm := req.GetBool("confirm", false)
@@ -76,82 +71,58 @@ func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client, log *slog.L
 
 		// Phase 1: Prompt for confirmation if not confirmed
 		if !confirm {
-			return mcp.NewToolResultErrorf(
-				"This will scale %s '%s' in namespace '%s' to %d replicas. Call again with confirm=true to proceed.",
-				kind, name, namespace, replicas,
-			), nil
+			result := ScaleResult{
+				WorkloadSummary: WorkloadSummary{
+					Kind:      kind,
+					Namespace: namespace,
+					Name:      name,
+					Desired:   replicas,
+				},
+			}
+			fallbackText := fmt.Sprintf("This will scale %s '%s' in namespace '%s' to %d replicas. Call again with confirm=true to proceed.", kind, name, namespace, replicas)
+			return mcp.NewToolResultStructured(result, fallbackText), nil
 		}
 
 		// Phase 2: Execute the scale operation
-		// Resolve kind if not provided
-		resolvedKind, err := resolveWorkloadKind(ctx, client, namespace, name, kind)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+		var err error
 
-		// Check if daemonset - cannot be scaled
-		if resolvedKind == "daemonset" {
-			return mcp.NewToolResultErrorf("cannot scale %s '%s': DaemonSets have no spec.replicas", resolvedKind, name), nil
-		}
-
-		// Scale the workload using the scale subresource
-		scale, err := client.AppsV1().Deployments(namespace).UpdateScale(ctx, name, &autoscalingv1.Scale{
-			Spec: autoscalingv1.ScaleSpec{
-				Replicas: int32(replicas),
-			},
-			Status: autoscalingv1.ScaleStatus{
-				Replicas: int32(replicas),
-			},
-		}, metav1.UpdateOptions{})
-		if err != nil {
-			// Try StatefulSet
-			scale, err = client.AppsV1().StatefulSets(namespace).UpdateScale(ctx, name, &autoscalingv1.Scale{
+		switch kind {
+		case "deployment":
+			_, err = client.AppsV1().Deployments(namespace).UpdateScale(ctx, name, &autoscalingv1.Scale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
 				Spec: autoscalingv1.ScaleSpec{
 					Replicas: int32(replicas),
 				},
-				Status: autoscalingv1.ScaleStatus{
+			}, metav1.UpdateOptions{})
+		case "statefulset":
+			_, err = client.AppsV1().StatefulSets(namespace).UpdateScale(ctx, name, &autoscalingv1.Scale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: autoscalingv1.ScaleSpec{
 					Replicas: int32(replicas),
 				},
 			}, metav1.UpdateOptions{})
+		default:
+			return mcp.NewToolResultErrorf("unsupported workload kind '%s' for scaling", kind), nil
 		}
-
 		if err != nil {
-			return mcp.NewToolResultErrorf("failed to scale %s '%s' in namespace '%s': %v", resolvedKind, name, namespace, err), nil
+			return mcp.NewToolResultErrorf("failed to scale %s '%s' in namespace '%s': %v", kind, name, namespace, err), nil
 		}
 
-		result, err := formatWorkloadsScale(scale, resolvedKind, replicas, format)
+		// Get the updated workload to get accurate status
+		updatedWorkload, err := getWorkloadByKind(ctx, client, namespace, name, kind)
 		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
+			return mcp.NewToolResultErrorf("failed to get updated %s '%s' in namespace '%s': %v", kind, name, namespace, err), nil
 		}
 
-		return mcp.NewToolResultText(result), nil
+		result := ScaleResult{
+			WorkloadSummary: toWorkloadSummary(updatedWorkload),
+		}
+		fallbackText := fmt.Sprintf("Scaled %s '%s' in namespace '%s' to %d replicas.", kind, name, namespace, replicas)
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
-}
-
-// formatWorkloadsScale formats the scale result for MCP tool output.
-func formatWorkloadsScale(scale *autoscalingv1.Scale, kind string, replicas int, format string) (string, error) {
-	if format == "json" {
-		return formatWorkloadsScaleJSON(scale, kind, replicas)
-	}
-	return formatWorkloadsScaleText(scale, kind, replicas), nil
-}
-
-// formatWorkloadsScaleText formats the scale result as text.
-func formatWorkloadsScaleText(scale *autoscalingv1.Scale, kind string, replicas int) string {
-	return fmt.Sprintf("Scaled %s '%s' in namespace '%s' to %d replicas.\n", kind, scale.Name, scale.Namespace, replicas)
-}
-
-// formatWorkloadsScaleJSON formats the scale result as JSON.
-func formatWorkloadsScaleJSON(scale *autoscalingv1.Scale, kind string, replicas int) (string, error) {
-	result := ScaleResult{
-		Kind:      kind,
-		Namespace: scale.Namespace,
-		Name:      scale.Name,
-		Replicas:  replicas,
-	}
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }

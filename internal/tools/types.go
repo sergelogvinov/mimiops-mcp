@@ -65,13 +65,14 @@ type EventSummary struct {
 
 // NodeSummary is the trimmed representation of a node used by nodes_list.
 type NodeSummary struct {
-	Name       string           `json:"name" jsonschema:"Name of the node"`
-	Status     string           `json:"status" jsonschema:"Status of the node"`
-	Roles      []string         `json:"roles" jsonschema:"Roles of the node"`
-	Age        string           `json:"age" jsonschema:"Age of the node"`
-	Version    string           `json:"version" jsonschema:"Kubelet version of the node"`
-	InternalIP string           `json:"internal_ip" jsonschema:"Internal IP address of the node"`
-	Capacity   NodeCapacityInfo `json:"capacity" jsonschema:"Capacity of the node"`
+	Name           string           `json:"name" jsonschema:"Name of the node"`
+	Status         string           `json:"status" jsonschema:"Status of the node"`
+	Roles          []string         `json:"roles" jsonschema:"Roles of the node"`
+	Age            string           `json:"age" jsonschema:"Age of the node"`
+	KubeletVersion string           `json:"kubelet_version" jsonschema:"Kubelet version of the node"`
+	ImageVersion   string           `json:"image_version" jsonschema:"OS image version of the node"`
+	InternalIP     string           `json:"internal_ip" jsonschema:"Internal IP address of the node"`
+	Capacity       NodeCapacityInfo `json:"capacity" jsonschema:"Capacity of the node"`
 }
 
 // NodeCapacityInfo is the trimmed representation of a node's capacity used by nodes_list.
@@ -84,12 +85,12 @@ type NodeCapacityInfo struct {
 // WorkloadSummary is the trimmed, agent-friendly representation of a workload
 // (Deployment, StatefulSet, or DaemonSet) used by workloads_list.
 type WorkloadSummary struct {
-	Kind      string `json:"kind"`
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	Ready     string `json:"ready"`
-	Desired   int    `json:"desired"`
-	Age       string `json:"age"`
+	Kind      string `json:"kind" jsonschema:"Kind of the workload (Deployment, StatefulSet, or DaemonSet)"`
+	Namespace string `json:"namespace" jsonschema:"Namespace of the workload"`
+	Name      string `json:"name" jsonschema:"Name of the workload"`
+	Ready     string `json:"ready,omitempty" jsonschema:"Number of ready replicas of the workload"`
+	Desired   int    `json:"desired" jsonschema:"Number of desired replicas of the workload"`
+	Age       string `json:"age,omitempty" jsonschema:"Age of the workload"`
 }
 
 // WorkloadDetails is the detailed representation of a workload used by
@@ -152,9 +153,9 @@ type PodSummary struct {
 	Namespace       string           `json:"namespace"`
 	Name            string           `json:"name"`
 	Ready           string           `json:"ready"`
-	Status          string           `json:"status"`
 	Restarts        int32            `json:"restarts"`
 	Age             string           `json:"age"`
+	Status          string           `json:"status"`
 	Node            string           `json:"node"`
 	OwnerReferences []OwnerReference `json:"ownerReferences,omitempty"`
 }

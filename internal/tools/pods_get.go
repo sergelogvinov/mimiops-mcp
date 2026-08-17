@@ -1,11 +1,10 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -14,13 +13,29 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// RegisterPodsGet adds the pods_get tool, which gets a full pod spec and status.
+// PodGetResult represents the result of getting a pod.
+type PodGetResult struct {
+	PodSummary
+
+	Labels      map[string]string `json:"labels" jsonschema:"Labels of the Pod"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the Pod"`
+	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the Pod"`
+
+	Tolerations []TaintInfo     `json:"tolerations,omitempty" jsonschema:"List of tolerations"`
+	Conditions  []ConditionInfo `json:"conditions,omitempty" jsonschema:"List of conditions"`
+}
+
+// RegisterPodsGet adds the pods_get tool, which gets a pod's full spec and status.
 func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("pods_get",
-		mcp.WithDescription("Get full pod spec and status."),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("Get Pod"),
+		mcp.WithDescription("Get a pod's full spec and status"),
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[PodGetResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -33,11 +48,6 @@ func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
-		format := req.GetString("format", "text")
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
-
 		log.DebugContext(ctx, "pods_get called",
 			"namespace", namespace,
 			"pod", name,
@@ -48,98 +58,61 @@ func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 			return mcp.NewToolResultErrorf("failed to get pod '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		result, err := formatPodDescribe(pod, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
-		}
+		result := buildPodGetResult(pod)
+		fallbackText := fmt.Sprintf("Pod '%s' in namespace '%s' has status '%s' with ready status '%s'. Age: %s.",
+			result.Name, result.Namespace, result.Status, result.Ready, result.Age)
 
-		return mcp.NewToolResultText(result), nil
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
-// formatPodDescribe formats a pod for MCP tool output.
-func formatPodDescribe(pod *corev1.Pod, format string) (string, error) {
-	if format == "json" {
-		return formatPodDescribeJSON(pod)
+// buildPodGetResult builds a PodGetResult from a Pod.
+func buildPodGetResult(pod *corev1.Pod) *PodGetResult {
+	result := &PodGetResult{
+		PodSummary:  toPodSummary(*pod),
+		Labels:      pod.Labels,
+		Annotations: pod.Annotations,
+		Spec:        make(map[string]any),
+		Tolerations: make([]TaintInfo, 0, len(pod.Spec.Tolerations)),
+		Conditions:  make([]ConditionInfo, 0, len(pod.Status.Conditions)),
 	}
-	return formatPodDescribeText(pod), nil
-}
 
-// formatPodDescribeText formats a pod's detailed information as key-value blocks.
-func formatPodDescribeText(pod *corev1.Pod) string {
-	var buf bytes.Buffer
+	if result.Labels == nil {
+		result.Labels = make(map[string]string)
+	}
+	if result.Annotations == nil {
+		result.Annotations = make(map[string]string)
+	}
 
-	fmt.Fprintf(&buf, "**Name:** %s\n", pod.Name)
-	fmt.Fprintf(&buf, "**Namespace:** %s\n", pod.Namespace)
-	fmt.Fprintf(&buf, "**Node:** %s\n", pod.Spec.NodeName)
-	fmt.Fprintf(&buf, "**Status:** %s\n", pod.Status.Phase)
-	fmt.Fprintf(&buf, "**Ready:** %s\n", formatReady(pod.Status))
-	fmt.Fprintf(&buf, "**Restarts:** %d\n", containerRestartCount(pod.Status))
-	fmt.Fprintf(&buf, "**Age:** %s\n", formatAge(pod.CreationTimestamp))
+	// Remove internal annotations
+	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
+		return k == "kubectl.kubernetes.io/last-applied-configuration"
+	})
 
-	// Containers
-	fmt.Fprintf(&buf, "\n### Containers\n\n")
-	for _, container := range pod.Spec.Containers {
-		fmt.Fprintf(&buf, "- **%s**: image=%s\n", container.Name, container.Image)
+	// Tolerations
+	for _, taint := range pod.Spec.Tolerations {
+		result.Tolerations = append(result.Tolerations, TaintInfo{
+			Key:    taint.Key,
+			Value:  taint.Value,
+			Effect: string(taint.Effect),
+		})
 	}
 
 	// Conditions
-	if len(pod.Status.Conditions) > 0 {
-		fmt.Fprintf(&buf, "\n### Conditions\n\n")
-		for _, cond := range pod.Status.Conditions {
-			fmt.Fprintf(&buf, "- **%s**: %s (%s)\n", cond.Type, cond.Status, cond.Reason)
-		}
+	for _, cond := range pod.Status.Conditions {
+		result.Conditions = append(result.Conditions, ConditionInfo{
+			Type:    string(cond.Type),
+			Status:  string(cond.Status),
+			Reason:  cond.Reason,
+			Message: cond.Message,
+		})
 	}
-
-	// Owner References
-	if len(pod.OwnerReferences) > 0 {
-		fmt.Fprintf(&buf, "\n### Owner References\n\n")
-		for _, ref := range pod.OwnerReferences {
-			fmt.Fprintf(&buf, "- %s/%s\n", ref.Kind, ref.Name)
-		}
-	}
-
-	return buf.String()
-}
-
-// formatPodDescribeJSON formats a pod as JSON.
-func formatPodDescribeJSON(pod *corev1.Pod) (string, error) {
-	type PodInfo struct {
-		Metadata map[string]any `json:"metadata"`
-		Spec     map[string]any `json:"spec"`
-		Status   map[string]any `json:"status"`
-		Summary  PodSummary     `json:"summary"`
-	}
-
-	info := PodInfo{}
-
-	// Metadata
-	info.Metadata = make(map[string]any)
-	info.Metadata["name"] = pod.Name
-	info.Metadata["namespace"] = pod.Namespace
-	info.Metadata["uid"] = string(pod.UID)
-	info.Metadata["creationTimestamp"] = pod.CreationTimestamp.String()
-	info.Metadata["labels"] = pod.Labels
-	info.Metadata["annotations"] = pod.Annotations
 
 	// Spec (simplified)
-	info.Spec = make(map[string]any)
-	info.Spec["nodeName"] = pod.Spec.NodeName
-	info.Spec["containers"] = pod.Spec.Containers
+	result.Spec = make(map[string]any)
+	result.Spec["nodeName"] = pod.Spec.NodeName
+	result.Spec["restartPolicy"] = pod.Spec.RestartPolicy
+	result.Spec["serviceAccountName"] = pod.Spec.ServiceAccountName
 
-	// Status (simplified)
-	info.Status = make(map[string]any)
-	info.Status["phase"] = pod.Status.Phase
-	info.Status["restartCount"] = containerRestartCount(pod.Status)
-	info.Status["conditions"] = pod.Status.Conditions
-	info.Status["containerStatuses"] = pod.Status.ContainerStatuses
-
-	// Summary
-	info.Summary = toPodSummary(*pod)
-
-	data, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	return result
 }
