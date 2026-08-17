@@ -57,7 +57,7 @@ func RegisterPodsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			return mcp.NewToolResultErrorf("failed to get pod '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		result := buildPodDescribeResult(pod)
+		result := buildPodDescribeResult(ctx, client, pod)
 		fallbackText := fmt.Sprintf("Pod '%s' in namespace '%s' has status '%s' with ready status '%s'. Age: %s.",
 			result.Name, result.Namespace, result.Status, result.Ready, result.Age)
 
@@ -66,9 +66,9 @@ func RegisterPodsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 }
 
 // buildPodDescribeResult builds a PodDescribeResult from a Pod.
-func buildPodDescribeResult(pod *corev1.Pod) *PodDescribeResult {
+func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodDescribeResult {
 	result := &PodDescribeResult{
-		PodSummary:  toPodSummary(*pod),
+		PodSummary:  toPodSummary(ctx, client, pod),
 		Labels:      pod.Labels,
 		Annotations: pod.Annotations,
 		Spec:        make(map[string]any),

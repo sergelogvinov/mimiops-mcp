@@ -8,6 +8,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // formatReady extracts the ready status from pod status.
@@ -32,11 +33,13 @@ func containerRestartCount(status corev1.PodStatus) int32 {
 }
 
 // toPodSummary converts a pod to a PodSummary.
-func toPodSummary(pod corev1.Pod) PodSummary {
+func toPodSummary(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod) PodSummary {
 	node := pod.Spec.NodeName
 	if node == "" {
 		node = "<pending>"
 	}
+
+	ownerRefs, _ := ownerReferences(ctx, client, pod) //nolint:errcheck
 
 	return PodSummary{
 		Namespace:       pod.Namespace,
@@ -46,7 +49,7 @@ func toPodSummary(pod corev1.Pod) PodSummary {
 		Restarts:        containerRestartCount(pod.Status),
 		Age:             formatAge(pod.CreationTimestamp),
 		Node:            node,
-		OwnerReferences: ownerReferences(&pod),
+		OwnerReferences: ownerRefs,
 	}
 }
 

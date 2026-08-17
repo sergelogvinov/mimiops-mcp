@@ -1,41 +1,56 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 const defaultContainerAnnotation = "kubectl.kubernetes.io/default-container"
 
 // ownerReferences extracts the pod's owner references as simplified structs.
-func ownerReferences(pod *corev1.Pod) []OwnerReference {
+// If an owner is a ReplicaSet, it fetches the ReplicaSet and returns its owner references
+// to get the actual workload (e.g., Deployment) that owns the pod.
+func ownerReferences(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod) ([]OwnerReference, error) {
 	refs := make([]OwnerReference, 0, len(pod.OwnerReferences))
 	for _, ref := range pod.OwnerReferences {
-		refs = append(refs, OwnerReference{
+		ownerRef := OwnerReference{
 			APIVersion: ref.APIVersion,
 			Kind:       ref.Kind,
 			Name:       ref.Name,
-		})
+		}
+
+		// If the owner is a ReplicaSet, fetch it to get its owner references
+		if ref.Kind == "ReplicaSet" {
+			rs, err := client.AppsV1().ReplicaSets(pod.Namespace).Get(ctx, ref.Name, metav1.GetOptions{})
+			if err == nil && rs != nil && len(rs.OwnerReferences) > 0 {
+				// Use the ReplicaSet's owner references instead
+				refs = append(refs, ownerReferencesFromMetav1(rs.OwnerReferences)...)
+				continue
+			}
+		}
+
+		refs = append(refs, ownerRef)
 	}
-	return refs
+	return refs, nil
 }
 
-// ownerReferencesMeta extracts owner references from a PartialObjectMetadata
-// (used by pods_list's partial metadata responses).
-func ownerReferencesMeta(pod *metav1.PartialObjectMetadata) []OwnerReference {
-	refs := make([]OwnerReference, 0, len(pod.OwnerReferences))
-	for _, ref := range pod.OwnerReferences {
-		refs = append(refs, OwnerReference{
+// ownerReferencesFromMetav1 converts metav1.OwnerReference to OwnerReference.
+func ownerReferencesFromMetav1(refs []metav1.OwnerReference) []OwnerReference {
+	result := make([]OwnerReference, 0, len(refs))
+	for _, ref := range refs {
+		result = append(result, OwnerReference{
 			APIVersion: ref.APIVersion,
 			Kind:       ref.Kind,
 			Name:       ref.Name,
 		})
 	}
-	return refs
+	return result
 }
 
 // formatAge calculates the age from creation time.

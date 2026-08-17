@@ -66,7 +66,7 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 
 		// Build result
 		for _, pod := range pods.Items {
-			result.Pods = append(result.Pods, toPodSummary(pod))
+			result.Pods = append(result.Pods, toPodSummary(ctx, client, &pod))
 		}
 
 		// Build fallback text

@@ -72,7 +72,7 @@ func RegisterPodsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 
 		// Build result
 		result := PodLogResult{
-			PodSummary: toPodSummary(*pod),
+			PodSummary: toPodSummary(ctx, client, pod),
 			Streams:    []LogStream{stream},
 		}
 		fallback := fmt.Sprintf("Pod '%s' in namespace '%s' has %d log stream(s).", name, namespace, len(result.Streams))
