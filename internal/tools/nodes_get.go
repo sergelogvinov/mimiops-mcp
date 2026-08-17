@@ -1,11 +1,10 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -14,13 +13,65 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// NodeGetResult represents the result of getting a node.
+type NodeGetResult struct {
+	NodeSummary
+
+	Labels      map[string]string `json:"labels" jsonschema:"Labels of the node"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the node"`
+	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the node"`
+	Status      map[string]any    `json:"status" jsonschema:"Status of the node"`
+
+	Allocated  *AllocatedInfo  `json:"allocated,omitempty" jsonschema:"Allocated resource information"`
+	Taints     []TaintInfo     `json:"taints,omitempty" jsonschema:"List of taints"`
+	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"List of conditions"`
+	Addresses  []AddressInfo   `json:"addresses,omitempty" jsonschema:"List of addresses"`
+	NodeInfo   *NodeInfo       `json:"node_info,omitempty" jsonschema:"Node information"`
+	Pods       []PodSummary    `json:"pods,omitempty" jsonschema:"List of pods running on the node"`
+}
+
+// TaintInfo represents a node taint.
+type TaintInfo struct {
+	Key    string `json:"key" jsonschema:"Key of the taint"`
+	Value  string `json:"value" jsonschema:"Value of the taint"`
+	Effect string `json:"effect" jsonschema:"Effect of the taint"`
+}
+
+// AddressInfo represents a node address.
+type AddressInfo struct {
+	Type    string `json:"type" jsonschema:"Type of the address"`
+	Address string `json:"address" jsonschema:"Address value"`
+}
+
+// NodeInfo represents node information.
+type NodeInfo struct {
+	KubeletVersion          string `json:"kubelet_version" jsonschema:"Kubelet version"`
+	OSImage                 string `json:"os_image" jsonschema:"OS image"`
+	ContainerRuntimeVersion string `json:"container_runtime_version" jsonschema:"Container runtime version"`
+	KernelVersion           string `json:"kernel_version" jsonschema:"Kernel version"`
+}
+
+// AllocatedInfo holds allocated resource information for a node.
+type AllocatedInfo struct {
+	RequestsCPU    string `json:"requests_cpu" jsonschema:"CPU requests (used/allocatable)"`
+	RequestsMemory string `json:"requests_memory" jsonschema:"Memory requests (used/allocatable)"`
+	LimitsCPU      string `json:"limits_cpu" jsonschema:"CPU limits (used/allocatable)"`
+	LimitsMemory   string `json:"limits_memory" jsonschema:"Memory limits (used/allocatable)"`
+	AllocatableCPU string `json:"allocatable_cpu" jsonschema:"Allocatable CPU"`
+	AllocatableMem string `json:"allocatable_memory" jsonschema:"Allocatable memory"`
+	PodCount       int    `json:"pod_count" jsonschema:"Number of pods"`
+}
+
 // RegisterNodesGet adds the nodes_get tool, which gets detailed information about a single node.
 func RegisterNodesGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("nodes_get",
-		mcp.WithDescription("Get detailed information about a single node."),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		// mcp.WithToolTitle("Get Node"),
+		mcp.WithDescription("Get detailed information about a single node"),
 		mcp.WithString("name", mcp.Description("node name"), mcp.Required()),
-		mcp.WithBoolean("include_pods", mcp.Description("include a summary of pods running on the node"), mcp.DefaultBool(false)),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[NodeGetResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -28,17 +79,7 @@ func RegisterNodesGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
 		}
 
-		includePods := req.GetBool("include_pods", false)
-		format := req.GetString("format", "text")
-
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
-
-		log.DebugContext(ctx, "nodes_get called",
-			"name", name,
-			"include_pods", includePods,
-		)
+		log.DebugContext(ctx, "nodes_get called", "name", name)
 
 		// Get the node
 		node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
@@ -54,173 +95,49 @@ func RegisterNodesGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 			log.WarnContext(ctx, "failed to list pods for node", "node", name, "err", err)
 		}
 
-		// Format output
-		result, err := formatNodeGet(node, pods.Items, includePods, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
-		}
+		// Build result
+		result := buildNodeGetResult(node, pods.Items)
 
-		return mcp.NewToolResultText(result), nil
+		// Build fallback text
+		fallbackText := fmt.Sprintf("Node '%s' has status '%s' with roles '%s'. CPU: %s, Memory: %s. Pod count: %d.",
+			result.Name, result.Status, result.Roles, result.Allocated.RequestsCPU, result.Allocated.RequestsMemory, result.Allocated.PodCount)
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
-// formatNodeGet formats a node for MCP tool output.
-func formatNodeGet(node *corev1.Node, pods []corev1.Pod, includePods bool, format string) (string, error) {
-	if format == "json" {
-		return formatNodeGetJSON(node, pods, includePods)
+// buildNodeGetResult builds a NodeGetResult from a Node.
+func buildNodeGetResult(node *corev1.Node, pods []corev1.Pod) *NodeGetResult {
+	result := &NodeGetResult{}
+
+	result.Labels = node.Labels
+	result.Annotations = node.Annotations
+
+	if result.Annotations == nil {
+		result.Annotations = make(map[string]string)
 	}
-	return formatNodeGetText(node, pods, includePods), nil
-}
-
-// formatNodeGetText formats a node's detailed information as key-value blocks.
-func formatNodeGetText(node *corev1.Node, pods []corev1.Pod, includePods bool) string {
-	var buf bytes.Buffer
-
-	name := node.Name
-	status := deriveNodeStatus(node)
-	roles := deriveNodeRoles(node)
-	age := formatAge(node.CreationTimestamp)
-
-	fmt.Fprintf(&buf, "**Name:** %s\n", name)
-	fmt.Fprintf(&buf, "**Status:** %s\n", status)
-	fmt.Fprintf(&buf, "**Roles:** %s\n", roles)
-	fmt.Fprintf(&buf, "**Age:** %s\n", age)
-
-	// Taints
-	if len(node.Spec.Taints) > 0 {
-		fmt.Fprintf(&buf, "\n### Taints\n\n")
-		for _, taint := range node.Spec.Taints {
-			fmt.Fprintf(&buf, "- %s=%s: %s\n", taint.Key, taint.Value, taint.Effect)
-		}
-	}
-
-	// Schedulable
-	fmt.Fprintf(&buf, "\n### Scheduling\n\n")
-	fmt.Fprintf(&buf, "- **Schedulable:** %t\n", !node.Spec.Unschedulable)
-	fmt.Fprintf(&buf, "- **Unschedulable:** %t\n", node.Spec.Unschedulable)
-
-	// Capacity
-	fmt.Fprintf(&buf, "\n### Capacity\n\n")
-	fmt.Fprintf(&buf, "- **CPU:** %s\n", node.Status.Capacity.Cpu().String())
-	fmt.Fprintf(&buf, "- **Memory:** %s\n", node.Status.Capacity.Memory().String())
-	fmt.Fprintf(&buf, "- **Pods:** %s\n", node.Status.Capacity.Pods().String())
-
-	// Allocatable
-	fmt.Fprintf(&buf, "\n### Allocatable\n\n")
-	fmt.Fprintf(&buf, "- **CPU:** %s\n", node.Status.Allocatable.Cpu().String())
-	fmt.Fprintf(&buf, "- **Memory:** %s\n", node.Status.Allocatable.Memory().String())
-	fmt.Fprintf(&buf, "- **Pods:** %s\n", node.Status.Allocatable.Pods().String())
-
-	// Allocated Resources
-	fmt.Fprintf(&buf, "\n### Allocated Resources\n\n")
-	allocMap := computeNodeAllocations(pods)
-	alloc := allocMap[node.Name]
-	allocatableCPU := node.Status.Allocatable.Cpu().String()
-	allocatableMem := node.Status.Allocatable.Memory().String()
-
-	if alloc != nil {
-		fmt.Fprintf(&buf, "- **CPU Requests:** %s / %s\n", alloc.RequestsCPU, allocatableCPU)
-		fmt.Fprintf(&buf, "- **CPU Limits:** %s / %s\n", alloc.LimitsCPU, allocatableCPU)
-		fmt.Fprintf(&buf, "- **Memory Requests:** %s / %s\n", alloc.RequestsMemory, allocatableMem)
-		fmt.Fprintf(&buf, "- **Memory Limits:** %s / %s\n", alloc.LimitsMemory, allocatableMem)
-	} else {
-		fmt.Fprintf(&buf, "- **CPU Requests:** - / %s\n", allocatableCPU)
-		fmt.Fprintf(&buf, "- **CPU Limits:** - / %s\n", allocatableCPU)
-		fmt.Fprintf(&buf, "- **Memory Requests:** - / %s\n", allocatableMem)
-		fmt.Fprintf(&buf, "- **Memory Limits:** - / %s\n", allocatableMem)
-	}
-
-	fmt.Fprintf(&buf, "- **Pod Count:** %d\n", len(pods))
-
-	// Conditions
-	if len(node.Status.Conditions) > 0 {
-		fmt.Fprintf(&buf, "\n### Conditions\n\n")
-		for _, cond := range node.Status.Conditions {
-			fmt.Fprintf(&buf, "- **%s**: %s (%s)\n", cond.Type, cond.Status, cond.Reason)
-		}
-	}
-
-	// Addresses
-	if len(node.Status.Addresses) > 0 {
-		fmt.Fprintf(&buf, "\n### Addresses\n\n")
-		for _, addr := range node.Status.Addresses {
-			fmt.Fprintf(&buf, "- **%s:** %s\n", addr.Type, addr.Address)
-		}
-	}
-
-	// Node Info
-	fmt.Fprintf(&buf, "\n### Node Info\n\n")
-	fmt.Fprintf(&buf, "- **Kubelet Version:** %s\n", node.Status.NodeInfo.KubeletVersion)
-	fmt.Fprintf(&buf, "- **OS Image:** %s\n", node.Status.NodeInfo.OSImage)
-	fmt.Fprintf(&buf, "- **Container Runtime Version:** %s\n", node.Status.NodeInfo.ContainerRuntimeVersion)
-	fmt.Fprintf(&buf, "- **Kernel Version:** %s\n", node.Status.NodeInfo.KernelVersion)
-
-	// Pods (if requested)
-	if includePods && len(pods) > 0 {
-		fmt.Fprintf(&buf, "\n### Pods\n\n")
-		cappedPods := pods
-		if len(pods) > 15 {
-			cappedPods = pods[:15]
-		}
-		for _, pod := range cappedPods {
-			podStatus := string(pod.Status.Phase)
-			if len(pod.Status.Conditions) > 0 {
-				for _, cond := range pod.Status.Conditions {
-					if cond.Type == corev1.PodReady {
-						podStatus = fmt.Sprintf("%s (Ready: %v)", pod.Status.Phase, cond.Status)
-						break
-					}
-				}
-			}
-			fmt.Fprintf(&buf, "- **%s:** %s\n", pod.Name, podStatus)
-		}
-		if len(pods) > 15 {
-			fmt.Fprintf(&buf, "\n... and %d more pods\n", len(pods)-15)
-		}
-	}
-
-	return buf.String()
-}
-
-// formatNodeGetJSON formats a node as JSON.
-func formatNodeGetJSON(node *corev1.Node, pods []corev1.Pod, includePods bool) (string, error) {
-	type NodeInfo struct {
-		Metadata  map[string]any `json:"metadata"`
-		Spec      map[string]any `json:"spec"`
-		Status    map[string]any `json:"status"`
-		Summary   NodeSummary    `json:"summary"`
-		Allocated *AllocatedInfo `json:"allocated,omitempty"`
-		Pods      []PodSummary   `json:"pods,omitempty"`
-	}
-
-	info := NodeInfo{}
-
-	// Metadata
-	info.Metadata = make(map[string]any)
-	info.Metadata["name"] = node.Name
-	info.Metadata["uid"] = string(node.UID)
-	info.Metadata["creationTimestamp"] = node.CreationTimestamp.String()
-	info.Metadata["labels"] = node.Labels
-	info.Metadata["annotations"] = node.Annotations
+	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
+		return k == "kubectl.kubernetes.io/last-applied-configuration"
+	})
 
 	// Spec (simplified)
-	info.Spec = make(map[string]any)
-	info.Spec["unschedulable"] = node.Spec.Unschedulable
-	info.Spec["taints"] = node.Spec.Taints
+	result.Spec = make(map[string]any)
+	result.Spec["unschedulable"] = node.Spec.Unschedulable
+	result.Spec["taints"] = node.Spec.Taints
 
 	// Status (simplified)
-	info.Status = make(map[string]any)
-	info.Status["capacity"] = node.Status.Capacity
-	info.Status["allocatable"] = node.Status.Allocatable
-	info.Status["conditions"] = node.Status.Conditions
-	info.Status["addresses"] = node.Status.Addresses
-	info.Status["nodeInfo"] = node.Status.NodeInfo
+	result.Status = make(map[string]any)
+	result.Status["capacity"] = node.Status.Capacity
+	result.Status["allocatable"] = node.Status.Allocatable
+	result.Status["conditions"] = node.Status.Conditions
+	result.Status["addresses"] = node.Status.Addresses
+	result.Status["nodeInfo"] = node.Status.NodeInfo
 
 	// Summary
-	info.Summary = NodeSummary{
+	result.NodeSummary = NodeSummary{
 		Name:       node.Name,
 		Status:     deriveNodeStatus(node),
-		Roles:      []string{deriveNodeRoles(node)},
+		Roles:      deriveNodeRoles(node),
 		Age:        formatAge(node.CreationTimestamp),
 		Version:    node.Status.NodeInfo.KubeletVersion,
 		InternalIP: getInternalIP(node),
@@ -230,7 +147,7 @@ func formatNodeGetJSON(node *corev1.Node, pods []corev1.Pod, includePods bool) (
 	allocMap := computeNodeAllocations(pods)
 	alloc := allocMap[node.Name]
 	if alloc != nil {
-		info.Allocated = &AllocatedInfo{
+		result.Allocated = &AllocatedInfo{
 			RequestsCPU:    alloc.RequestsCPU,
 			RequestsMemory: alloc.RequestsMemory,
 			LimitsCPU:      alloc.LimitsCPU,
@@ -241,31 +158,54 @@ func formatNodeGetJSON(node *corev1.Node, pods []corev1.Pod, includePods bool) (
 		}
 	}
 
+	// Taints
+	result.Taints = make([]TaintInfo, 0, len(node.Spec.Taints))
+	for _, taint := range node.Spec.Taints {
+		result.Taints = append(result.Taints, TaintInfo{
+			Key:    taint.Key,
+			Value:  taint.Value,
+			Effect: string(taint.Effect),
+		})
+	}
+
+	// Conditions
+	result.Conditions = make([]ConditionInfo, 0, len(node.Status.Conditions))
+	for _, cond := range node.Status.Conditions {
+		result.Conditions = append(result.Conditions, ConditionInfo{
+			Type:    string(cond.Type),
+			Status:  string(cond.Status),
+			Reason:  cond.Reason,
+			Message: cond.Message,
+		})
+	}
+
+	// Addresses
+	result.Addresses = make([]AddressInfo, 0, len(node.Status.Addresses))
+	for _, addr := range node.Status.Addresses {
+		result.Addresses = append(result.Addresses, AddressInfo{
+			Type:    string(addr.Type),
+			Address: addr.Address,
+		})
+	}
+
+	// Node Info
+	result.NodeInfo = &NodeInfo{
+		KubeletVersion:          node.Status.NodeInfo.KubeletVersion,
+		OSImage:                 node.Status.NodeInfo.OSImage,
+		ContainerRuntimeVersion: node.Status.NodeInfo.ContainerRuntimeVersion,
+		KernelVersion:           node.Status.NodeInfo.KernelVersion,
+	}
+
 	// Pods
-	if includePods && len(pods) > 0 {
+	if len(pods) > 0 {
 		cappedPods := pods
 		if len(pods) > 15 {
 			cappedPods = pods[:15]
 		}
 		for _, pod := range cappedPods {
-			info.Pods = append(info.Pods, toPodSummary(pod))
+			result.Pods = append(result.Pods, toPodSummary(pod))
 		}
 	}
 
-	data, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// AllocatedInfo holds allocated resource information for a node.
-type AllocatedInfo struct {
-	RequestsCPU    string `json:"requests_cpu"`
-	RequestsMemory string `json:"requests_memory"`
-	LimitsCPU      string `json:"limits_cpu"`
-	LimitsMemory   string `json:"limits_memory"`
-	AllocatableCPU string `json:"allocatable_cpu"`
-	AllocatableMem string `json:"allocatable_memory"`
-	PodCount       int    `json:"pod_count"`
+	return result
 }

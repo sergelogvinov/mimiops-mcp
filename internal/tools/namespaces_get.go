@@ -1,9 +1,7 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -14,23 +12,31 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// NamespaceGetResult represents the result of getting a namespace.
+type NamespaceGetResult struct {
+	NamespaceSummary
+
+	Labels      map[string]string `json:"labels" jsonschema:"Labels of the namespace"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the namespace"`
+	Finalizers  []string          `json:"finalizers" jsonschema:"List of finalizers"`
+	Conditions  []ConditionInfo   `json:"conditions" jsonschema:"List of conditions"`
+}
+
 // RegisterNamespacesGet adds the namespaces_get tool, which gets a single namespace's full spec and status.
 func RegisterNamespacesGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("namespaces_get",
-		mcp.WithDescription("Get a single namespace's full spec and status."),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("Get namespace"),
+		mcp.WithDescription("Get a namespace full spec and status."),
 		mcp.WithString("name", mcp.Description("namespace name"), mcp.Required()),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[NamespaceGetResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
-		}
-
-		format := req.GetString("format", "text")
-
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
 		}
 
 		log.DebugContext(ctx, "namespaces_get called", "namespace", name)
@@ -41,106 +47,39 @@ func RegisterNamespacesGet(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 			return mcp.NewToolResultErrorf("failed to get namespace '%s': %v", name, err), nil
 		}
 
-		// Format output
-		result, err := formatNamespaceGet(ns, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
-		}
+		// Build result
+		result := buildNamespaceGetResult(ns)
 
-		return mcp.NewToolResultText(result), nil
+		// Build fallback text
+		fallbackText := fmt.Sprintf("Namespace '%s' has status '%s'. Age: %s.", result.Name, result.Status, result.Age)
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
-// formatNamespaceGet formats a namespace for MCP tool output.
-func formatNamespaceGet(ns *corev1.Namespace, format string) (string, error) {
-	if format == "json" {
-		return formatNamespaceGetJSON(ns)
-	}
-	return formatNamespaceGetText(ns), nil
-}
-
-// formatNamespaceGetText formats a namespace's detailed information as key-value blocks.
-func formatNamespaceGetText(ns *corev1.Namespace) string {
-	var buf bytes.Buffer
-
-	fmt.Fprintf(&buf, "**Name:** %s\n", ns.Name)
-	fmt.Fprintf(&buf, "**Status:** %s\n", ns.Status.Phase)
-
-	// Labels
-	if len(ns.Labels) > 0 {
-		fmt.Fprintf(&buf, "\n### Labels\n\n")
-		for k, v := range ns.Labels {
-			fmt.Fprintf(&buf, "- **%s:** %s\n", k, v)
-		}
-	}
-
-	// Annotations
-	if len(ns.Annotations) > 0 {
-		fmt.Fprintf(&buf, "\n### Annotations\n\n")
-		for k, v := range ns.Annotations {
-			fmt.Fprintf(&buf, "- **%s:** %s\n", k, v)
-		}
-	}
-
-	// Finalizers
-	if len(ns.Finalizers) > 0 {
-		fmt.Fprintf(&buf, "\n### Finalizers\n\n")
-		for _, f := range ns.Finalizers {
-			fmt.Fprintf(&buf, "- %s\n", f)
-		}
+// buildNamespaceGetResult builds a NamespaceGetResult from a Namespace.
+func buildNamespaceGetResult(ns *corev1.Namespace) *NamespaceGetResult {
+	result := &NamespaceGetResult{
+		NamespaceSummary: NamespaceSummary{
+			Name:   ns.Name,
+			Status: string(ns.Status.Phase),
+			Age:    formatAge(ns.CreationTimestamp),
+		},
+		Labels:      ns.Labels,
+		Annotations: ns.Annotations,
+		Finalizers:  ns.Finalizers,
+		Conditions:  make([]ConditionInfo, 0, len(ns.Status.Conditions)),
 	}
 
 	// Conditions
-	if len(ns.Status.Conditions) > 0 {
-		fmt.Fprintf(&buf, "\n### Conditions\n\n")
-		for _, cond := range ns.Status.Conditions {
-			fmt.Fprintf(&buf, "- **%s**: %s (%s)\n", cond.Type, cond.Status, cond.Reason)
-		}
+	for _, c := range ns.Status.Conditions {
+		result.Conditions = append(result.Conditions, ConditionInfo{
+			Type:    string(c.Type),
+			Status:  string(c.Status),
+			Reason:  c.Reason,
+			Message: c.Message,
+		})
 	}
 
-	fmt.Fprintf(&buf, "\n**Age:** %s\n", formatAge(ns.CreationTimestamp))
-
-	return buf.String()
-}
-
-// formatNamespaceGetJSON formats a namespace as JSON.
-func formatNamespaceGetJSON(ns *corev1.Namespace) (string, error) {
-	type NamespaceInfo struct {
-		Metadata map[string]any   `json:"metadata"`
-		Spec     map[string]any   `json:"spec"`
-		Status   map[string]any   `json:"status"`
-		Summary  NamespaceSummary `json:"summary"`
-	}
-
-	info := NamespaceInfo{}
-
-	// Metadata
-	info.Metadata = make(map[string]any)
-	info.Metadata["name"] = ns.Name
-	info.Metadata["uid"] = string(ns.UID)
-	info.Metadata["creationTimestamp"] = ns.CreationTimestamp.String()
-	info.Metadata["labels"] = ns.Labels
-	info.Metadata["annotations"] = ns.Annotations
-
-	// Spec (simplified)
-	info.Spec = make(map[string]any)
-
-	// Status (simplified)
-	info.Status = make(map[string]any)
-	info.Status["phase"] = ns.Status.Phase
-	info.Status["conditions"] = ns.Status.Conditions
-	info.Status["finalizers"] = ns.Finalizers
-
-	// Summary
-	info.Summary = NamespaceSummary{
-		Name:   ns.Name,
-		Status: string(ns.Status.Phase),
-		Age:    formatAge(ns.CreationTimestamp),
-	}
-
-	data, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	return result
 }

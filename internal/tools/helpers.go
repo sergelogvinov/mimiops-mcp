@@ -55,6 +55,26 @@ func formatAge(created metav1.Time) string {
 	return fmt.Sprintf("%dd", int(diff.Hours()/24))
 }
 
+// formatDuration calculates the duration between two times.
+func formatDuration(end, start metav1.Time) string {
+	endTime := end.Time
+	startTime := start.Time
+	diff := endTime.Sub(startTime)
+	if diff < time.Second {
+		return "0s"
+	}
+	if diff < time.Minute {
+		return fmt.Sprintf("%ds", int(diff.Seconds()))
+	}
+	if diff < time.Hour {
+		return fmt.Sprintf("%dm", int(diff.Minutes()))
+	}
+	if diff < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(diff.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(diff.Hours()/24))
+}
+
 // formatMatchLabels converts match labels to a comma-separated string.
 func formatMatchLabels(labels map[string]string) string {
 	if len(labels) == 0 {
@@ -75,18 +95,17 @@ func formatMatchLabels(labels map[string]string) string {
 }
 
 // extractContainerInfo extracts container information from a pod spec.
-func extractContainerInfo(containers []corev1.Container) []Container {
-	result := make([]Container, 0, len(containers))
+func extractContainerInfo(containers []corev1.Container) []ContainerInfo {
+	result := make([]ContainerInfo, 0, len(containers))
 	for _, c := range containers {
 		ports := make([]int32, 0, len(c.Ports))
 		for _, p := range c.Ports {
 			ports = append(ports, p.ContainerPort)
 		}
-		result = append(result, Container{
+		result = append(result, ContainerInfo{
 			Name:  c.Name,
 			Image: c.Image,
 			Ports: ports,
-			Args:  c.Args,
 		})
 	}
 	return result

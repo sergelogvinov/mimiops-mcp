@@ -13,6 +13,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// ScaleResult represents the result of a scale operation.
+type ScaleResult struct {
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Replicas  int    `json:"replicas"`
+}
+
 // RegisterWorkloadsScale adds the workloads_scale tool, which scales a Deployment
 // or StatefulSet to a target replica count. This is a mutating tool and requires
 // --allow-destructive flag to be enabled.

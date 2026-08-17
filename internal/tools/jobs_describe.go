@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -14,13 +13,25 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// RegisterJobsDescribe adds the jobs_describe tool, which provides a human-readable Job summary.
+// JobDescribeResult represents the result of describing a Job.
+type JobDescribeResult struct {
+	JobSummary
+
+	Labels      map[string]string `json:"labels" jsonschema:"labels of the Job"`
+	Annotations map[string]string `json:"annotations" jsonschema:"annotations of the Job"`
+	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the Job"`
+	Containers  []ContainerInfo   `json:"containers" jsonschema:"List of containers in the Job's pod template"`
+	Conditions  []ConditionInfo   `json:"conditions" jsonschema:"List of conditions of the Job"`
+	Pods        []PodInfo         `json:"pods" jsonschema:"List of pods owned by the Job with running status"`
+}
+
+// RegisterJobsDescribe adds the jobs_describe tool, which provides a structured Job summary.
 func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("jobs_describe",
-		mcp.WithDescription("Human-readable Job summary (conditions, parallelism, completions, backoff, pod selector, active pods)."),
+		mcp.WithDescription("Job summary (conditions, parallelism, completions, backoff, active pods list)."),
 		mcp.WithString("name", mcp.Description("Job name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[JobDescribeResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -33,11 +44,6 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
-		format := req.GetString("format", "text")
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
-
 		log.DebugContext(ctx, "jobs_describe called",
 			"namespace", namespace,
 			"job", name,
@@ -48,110 +54,86 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			return mcp.NewToolResultErrorf("failed to get Job '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		result, err := formatJobDescribeWithPods(ctx, job, format, client, namespace)
+		result, err := buildJobDescribeResult(ctx, job, client)
 		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
+			return mcp.NewToolResultErrorf("failed to build result: %v", err), nil
 		}
 
-		return mcp.NewToolResultText(result), nil
+		// Build fallback text with summary
+		fallbackText := fmt.Sprintf("Job '%s' in namespace '%s' has status '%s' with completions %s. Age: %s.",
+			result.Name, result.Namespace, result.Status, result.Completions, result.Age)
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
-// formatJobDescribeWithPods formats a Job's detailed information with active pods.
-func formatJobDescribeWithPods(ctx context.Context, job *batchv1.Job, format string, client *k8s.Client, namespace string) (string, error) {
-	if format == "json" {
-		return formatJobDescribeJSON(job)
-	}
-	return formatJobDescribeTextWithPods(ctx, job, client, namespace), nil
-}
+// buildJobDescribeResult builds a JobDescribeResult from a Job.
+func buildJobDescribeResult(ctx context.Context, job *batchv1.Job, client *k8s.Client) (*JobDescribeResult, error) {
+	result := &JobDescribeResult{}
 
-// formatJobDescribeTextWithPods formats a Job's detailed information with active pods.
-func formatJobDescribeTextWithPods(ctx context.Context, job *batchv1.Job, client *k8s.Client, namespace string) string {
-	var buf bytes.Buffer
+	result.Labels = job.Labels
+	result.Annotations = job.Annotations
 
-	fmt.Fprintf(&buf, "**Name:** %s\n", job.Name)
-	fmt.Fprintf(&buf, "**Namespace:** %s\n", job.Namespace)
-	fmt.Fprintf(&buf, "**Status:** %s\n", deriveJobStatus(*job))
-	fmt.Fprintf(&buf, "**Completions:** %d/%d\n", job.Status.Succeeded, *job.Spec.Completions)
-	fmt.Fprintf(&buf, "**Parallelism:** %d\n", *job.Spec.Parallelism)
-	fmt.Fprintf(&buf, "**Backoff Limit:** %d\n", *job.Spec.BackoffLimit)
-	fmt.Fprintf(&buf, "**Age:** %s\n", formatAge(job.CreationTimestamp))
+	// Spec (simplified)
+	result.Spec = make(map[string]any)
+	result.Spec["completions"] = job.Spec.Completions
+	result.Spec["parallelism"] = job.Spec.Parallelism
+	result.Spec["backoffLimit"] = job.Spec.BackoffLimit
+	result.Spec["activeDeadlineSeconds"] = job.Spec.ActiveDeadlineSeconds
 
-	if job.Status.StartTime != nil {
-		fmt.Fprintf(&buf, "**Start Time:** %s\n", job.Status.StartTime.String())
-	}
-	if job.Status.CompletionTime != nil {
-		fmt.Fprintf(&buf, "**Completion Time:** %s\n", job.Status.CompletionTime.String())
-	}
+	// Summary
+	result.JobSummary = toJobSummary(*job)
+
+	// Containers
+	result.Containers = extractContainerInfo(job.Spec.Template.Spec.Containers)
 
 	// Conditions
-	if len(job.Status.Conditions) > 0 {
-		fmt.Fprintf(&buf, "\n### Conditions\n\n")
-		for _, cond := range job.Status.Conditions {
-			fmt.Fprintf(&buf, "- **%s**: %s (%s)\n", cond.Type, cond.Status, cond.Reason)
-		}
+	result.Conditions = make([]ConditionInfo, 0, len(job.Status.Conditions))
+	for _, cond := range job.Status.Conditions {
+		result.Conditions = append(result.Conditions, ConditionInfo{
+			Type:    string(cond.Type),
+			Status:  string(cond.Status),
+			Reason:  cond.Reason,
+			Message: cond.Message,
+		})
 	}
 
-	// Active Pods (capped at 5)
-	fmt.Fprintf(&buf, "\n### Active Pods\n\n")
-	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	// Pods - list pods by Job owner reference
+	pods, err := client.CoreV1().Pods(job.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		fmt.Fprintf(&buf, "Failed to list pods: %v\n", err)
-	} else {
-		// Filter pods by Job owner reference
-		var ownedPods []corev1.Pod
-		for _, pod := range pods.Items {
-			if metav1.GetControllerOf(&pod) != nil && metav1.GetControllerOf(&pod).UID == job.UID {
-				ownedPods = append(ownedPods, pod)
-			}
-		}
+		return nil, fmt.Errorf("failed to list pods: %w", err)
+	}
 
-		if len(ownedPods) == 0 {
-			fmt.Fprintf(&buf, "No active pods.\n")
-		} else {
-			// Limit to 5 pods
-			maxPods := 5
-			if len(ownedPods) > maxPods {
-				maxPods = 5
-			}
-			for _, pod := range ownedPods[:maxPods] {
-				podStatus := string(pod.Status.Phase)
-				if pod.Status.Phase == corev1.PodRunning {
-					podStatus = fmt.Sprintf("Running (%d/%d)", countReadyContainers(pod.Status), len(pod.Status.ContainerStatuses))
-				}
-				fmt.Fprintf(&buf, "- %s: %s\n", pod.Name, podStatus)
-			}
-			if len(ownedPods) > maxPods {
-				fmt.Fprintf(&buf, "... and %d more\n", len(ownedPods)-maxPods)
-			}
+	// Filter pods by Job owner reference
+	var ownedPods []corev1.Pod
+	for _, pod := range pods.Items {
+		if metav1.GetControllerOf(&pod) != nil && metav1.GetControllerOf(&pod).UID == job.UID {
+			ownedPods = append(ownedPods, pod)
 		}
 	}
 
-	// Pod Template
-	fmt.Fprintf(&buf, "\n### Pod Template\n\n")
-	template := job.Spec.Template
-	fmt.Fprintf(&buf, "- **Labels:** %v\n", template.Labels)
-	fmt.Fprintf(&buf, "- **Restart Policy:** %s\n", template.Spec.RestartPolicy)
-
-	if template.Spec.ActiveDeadlineSeconds != nil {
-		fmt.Fprintf(&buf, "- **Active Deadline Seconds:** %d\n", *template.Spec.ActiveDeadlineSeconds)
-	}
-
-	fmt.Fprintf(&buf, "\n### Containers\n\n")
-	for _, container := range template.Spec.Containers {
-		fmt.Fprintf(&buf, "- **%s**: image=%s\n", container.Name, container.Image)
-	}
-
-	return buf.String()
-}
-
-// countReadyContainers counts the number of ready containers in a pod.
-func countReadyContainers(status corev1.PodStatus) int {
-	ready := 0
-	for _, cs := range status.ContainerStatuses {
-		if cs.Ready {
-			ready++
+	result.Pods = make([]PodInfo, 0, len(ownedPods))
+	for _, pod := range ownedPods {
+		podInfo := PodInfo{
+			Name:  pod.Name,
+			Phase: string(pod.Status.Phase),
 		}
+
+		// Calculate ready status
+		readyCount := 0
+		for _, cs := range pod.Status.ContainerStatuses {
+			if cs.Ready {
+				readyCount++
+			}
+		}
+		podInfo.Ready = fmt.Sprintf("%d/%d", readyCount, len(pod.Status.ContainerStatuses))
+
+		if pod.Status.StartTime != nil {
+			podInfo.StartTime = pod.Status.StartTime.String()
+		}
+
+		result.Pods = append(result.Pods, podInfo)
 	}
-	return ready
+
+	return result, nil
 }

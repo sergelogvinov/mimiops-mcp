@@ -1,9 +1,7 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -16,24 +14,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// NodesListResult represents the result of listing nodes.
+type NodesListResult struct {
+	Nodes []NodeSummary `json:"nodes" jsonschema:"List of nodes"`
+}
+
 // RegisterNodesList adds the nodes_list tool, which lists cluster nodes and their status.
 func RegisterNodesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("nodes_list",
-		mcp.WithDescription("List cluster nodes and their status."),
-		mcp.WithBoolean("include_allocations", mcp.Description("include aggregate pod CPU/memory request & limit sums per node"), mcp.DefaultBool(false)),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("List Nodes"),
+		mcp.WithDescription("List cluster nodes and their status"),
+		mcp.WithOutputSchema[NodesListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		includeAllocations := req.GetBool("include_allocations", false)
-		format := req.GetString("format", "text")
-
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
-
-		log.DebugContext(ctx, "nodes_list called",
-			"include_allocations", includeAllocations,
-		)
+	s.AddTool(tool, func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		log.DebugContext(ctx, "nodes_list called")
 
 		// List nodes
 		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
@@ -41,157 +38,42 @@ func RegisterNodesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 			return mcp.NewToolResultErrorf("failed to list nodes: %v", err), nil
 		}
 
-		// Format output
-		result, err := formatNodesList(ctx, nodes.Items, includeAllocations, format, client, log)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
+		result := NodesListResult{
+			Nodes: make([]NodeSummary, 0, len(nodes.Items)),
 		}
 
-		return mcp.NewToolResultText(result), nil
+		// Build result
+		for _, node := range nodes.Items {
+			summary := NodeSummary{
+				Name:       node.Name,
+				Status:     deriveNodeStatus(&node),
+				Roles:      deriveNodeRoles(&node),
+				Age:        formatAge(node.CreationTimestamp),
+				Version:    node.Status.NodeInfo.KubeletVersion,
+				InternalIP: getInternalIP(&node),
+				Capacity: NodeCapacityInfo{
+					CPU:    node.Status.Capacity.Cpu().String(),
+					Memory: node.Status.Capacity.Memory().String(),
+					Pods:   int(node.Status.Capacity.Pods().Value()),
+				},
+			}
+
+			result.Nodes = append(result.Nodes, summary)
+		}
+
+		// Build fallback text
+		var fallbackText string
+		switch len(result.Nodes) {
+		case 0:
+			fallbackText = "No nodes found."
+		case 1:
+			fallbackText = fmt.Sprintf("Found 1 node: %s (%s)", result.Nodes[0].Name, result.Nodes[0].Status)
+		default:
+			fallbackText = fmt.Sprintf("Found %d nodes", len(result.Nodes))
+		}
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
-}
-
-// formatNodesList formats a list of nodes for MCP tool output.
-func formatNodesList(ctx context.Context, nodes []corev1.Node, includeAllocations bool, format string, client *k8s.Client, log *slog.Logger) (string, error) {
-	if format == "json" {
-		return formatNodesListJSON(ctx, nodes, includeAllocations, client, log)
-	}
-	return formatNodesListText(ctx, nodes, includeAllocations, client, log), nil
-}
-
-// formatNodesListText formats a list of nodes as a markdown table.
-func formatNodesListText(ctx context.Context, nodes []corev1.Node, includeAllocations bool, client *k8s.Client, log *slog.Logger) string {
-	if len(nodes) == 0 {
-		return "No nodes found."
-	}
-
-	var buf bytes.Buffer
-	if includeAllocations {
-		buf.WriteString("| NAME | STATUS | ROLES | AGE | VERSION | INTERNAL-IP | REQUESTS CPU | REQUESTS MEMORY | LIMITS CPU | LIMITS MEMORY |\n")
-		buf.WriteString("|------|--------|-------|-----|---------|-------------|--------------|-----------------|------------|---------------|\n")
-	} else {
-		buf.WriteString("| NAME | STATUS | ROLES | AGE | VERSION | INTERNAL-IP |\n")
-		buf.WriteString("|------|--------|-------|-----|---------|-------------|\n")
-	}
-
-	// Pre-compute allocations if needed
-	var podList *corev1.PodList
-	var err error
-	if includeAllocations {
-		podList, err = client.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			log.WarnContext(ctx, "failed to list pods for allocation calculation", "err", err)
-		}
-	}
-
-	allocations := make(map[string]*NodeAllocations)
-	if includeAllocations && podList != nil {
-		allocations = computeNodeAllocations(podList.Items)
-	}
-
-	for _, node := range nodes {
-		name := node.Name
-		status := deriveNodeStatus(&node)
-		roles := deriveNodeRoles(&node)
-		age := formatAge(node.CreationTimestamp)
-		version := node.Status.NodeInfo.KubeletVersion
-		internalIP := getInternalIP(&node)
-
-		if includeAllocations {
-			alloc := allocations[node.Name]
-			reqCPU, reqMem := "-", "-"
-			limCPU, limMem := "-", "-"
-			if alloc != nil {
-				reqCPU = fmt.Sprintf("%s/%s", alloc.RequestsCPU, alloc.AllocatableCPU)
-				reqMem = fmt.Sprintf("%s/%s", alloc.RequestsMemory, alloc.AllocatableMemory)
-				limCPU = fmt.Sprintf("%s/%s", alloc.LimitsCPU, alloc.AllocatableCPU)
-				limMem = fmt.Sprintf("%s/%s", alloc.LimitsMemory, alloc.AllocatableMemory)
-			}
-			fmt.Fprintf(&buf, "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
-				name, status, roles, age, version, internalIP, reqCPU, reqMem, limCPU, limMem)
-		} else {
-			fmt.Fprintf(&buf, "| %s | %s | %s | %s | %s | %s |\n",
-				name, status, roles, age, version, internalIP)
-		}
-	}
-
-	return buf.String()
-}
-
-// formatNodesListJSON formats a list of nodes as JSON.
-func formatNodesListJSON(ctx context.Context, nodes []corev1.Node, includeAllocations bool, client *k8s.Client, log *slog.Logger) (string, error) {
-	summaries := make([]NodeSummary, 0, len(nodes))
-
-	// Pre-compute allocations if needed
-	var podList *corev1.PodList
-	var err error
-	if includeAllocations {
-		podList, err = client.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			log.WarnContext(ctx, "failed to list pods for allocation calculation", "err", err)
-		}
-	}
-
-	allocations := make(map[string]*NodeAllocations)
-	if includeAllocations && podList != nil {
-		allocations = computeNodeAllocations(podList.Items)
-	}
-
-	for _, node := range nodes {
-		name := node.Name
-		status := deriveNodeStatus(&node)
-		roles := deriveNodeRoles(&node)
-		age := formatAge(node.CreationTimestamp)
-		version := node.Status.NodeInfo.KubeletVersion
-		internalIP := getInternalIP(&node)
-
-		summary := NodeSummary{
-			Name:       name,
-			Status:     status,
-			Roles:      []string{roles},
-			Age:        age,
-			Version:    version,
-			InternalIP: internalIP,
-		}
-
-		if includeAllocations {
-			alloc := allocations[node.Name]
-			if alloc != nil {
-				summary.RequestsCPU = fmt.Sprintf("%s/%s", alloc.RequestsCPU, alloc.AllocatableCPU)
-				summary.RequestsMemory = fmt.Sprintf("%s/%s", alloc.RequestsMemory, alloc.AllocatableMemory)
-				summary.LimitsCPU = fmt.Sprintf("%s/%s", alloc.LimitsCPU, alloc.AllocatableCPU)
-				summary.LimitsMemory = fmt.Sprintf("%s/%s", alloc.LimitsMemory, alloc.AllocatableMemory)
-			}
-		}
-
-		summaries = append(summaries, summary)
-	}
-
-	result := struct {
-		Nodes []NodeSummary `json:"nodes"`
-	}{
-		Nodes: summaries,
-	}
-
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// NodeSummary is the trimmed representation of a node used by nodes_list.
-type NodeSummary struct {
-	Name           string   `json:"name"`
-	Status         string   `json:"status"`
-	Roles          []string `json:"roles"`
-	Age            string   `json:"age"`
-	Version        string   `json:"version"`
-	InternalIP     string   `json:"internal_ip"`
-	RequestsCPU    string   `json:"requests_cpu,omitempty"`
-	RequestsMemory string   `json:"requests_memory,omitempty"`
-	LimitsCPU      string   `json:"limits_cpu,omitempty"`
-	LimitsMemory   string   `json:"limits_memory,omitempty"`
 }
 
 // NodeAllocations holds computed resource allocations for a node.
@@ -231,28 +113,22 @@ func deriveNodeStatus(node *corev1.Node) string {
 }
 
 // deriveNodeRoles derives node roles from labels.
-func deriveNodeRoles(node *corev1.Node) string {
+func deriveNodeRoles(node *corev1.Node) []string {
 	roles := make([]string, 0)
 
 	for label := range node.Labels {
-		if isRoleLabel(label) {
-			role := strings.TrimPrefix(label, "node-role.kubernetes.io/")
+		if role, ok := strings.CutPrefix(label, "node-role.kubernetes.io/"); ok {
 			roles = append(roles, role)
 		}
 	}
 
 	if len(roles) == 0 {
-		return "none"
+		return []string{}
 	}
 
 	// Sort roles for consistent output
 	sort.Strings(roles)
-	return strings.Join(roles, ",")
-}
-
-// isRoleLabel checks if a label is a node role label.
-func isRoleLabel(label string) bool {
-	return strings.HasPrefix(label, "node-role.kubernetes.io/")
+	return roles
 }
 
 // getInternalIP gets the internal IP address from node addresses.

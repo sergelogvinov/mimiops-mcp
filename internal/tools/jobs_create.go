@@ -1,9 +1,7 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -16,14 +14,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// JobsCreateResult represents the result of creating a Job.
+type JobsCreateResult struct {
+	JobSummary
+}
+
 // RegisterJobsCreate adds the jobs_create tool, which creates a one-off Job from a CronJob's job template.
 func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("jobs_create",
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithToolTitle("Create Job from CronJob"),
 		mcp.WithDescription("Create a one-off Job from a CronJob's job template (CLI equivalent: kubectl create job --from=cronjob/<name>)."),
 		mcp.WithString("cronjob", mcp.Description("CronJob name to source the template from"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("job_name", mcp.Description("Job name (optional, default: <cronjob>-manual-<random4>)")),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[JobsCreateResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cronjobName := req.GetString("cronjob", "")
@@ -37,16 +44,11 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		}
 
 		jobName := req.GetString("job_name", "")
-		format := req.GetString("format", "text")
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
 
 		log.DebugContext(ctx, "jobs_create called",
 			"cronjob", cronjobName,
 			"namespace", namespace,
 			"job_name", jobName,
-			"format", format,
 		)
 
 		// Get the CronJob
@@ -67,12 +69,12 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 			return mcp.NewToolResultErrorf("failed to create Job '%s': %v", finalJobName, err), nil
 		}
 
-		result, err := formatJobCreate(job, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
+		result := JobsCreateResult{
+			JobSummary: toJobSummary(*job),
 		}
+		fallbackText := fmt.Sprintf("Created Job '%s' in namespace '%s'", finalJobName, namespace)
 
-		return mcp.NewToolResultText(result), nil
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
@@ -123,54 +125,6 @@ func createJobFromCronJob(ctx context.Context, client *k8s.Client, namespace, jo
 	}
 	job.Spec.Template.Labels["job-name"] = job.Name
 
-	// Clear the suspend field (a manual run executes regardless of the CronJob's suspend state)
-	// Note: Job doesn't have a suspend field, but we ensure the template is used as-is
-
 	// Create the Job
 	return client.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
-}
-
-// formatJobCreate formats the result of job creation.
-func formatJobCreate(job *batchv1.Job, format string) (string, error) {
-	if format == "json" {
-		return formatJobCreateJSON(job)
-	}
-	return formatJobCreateText(job), nil
-}
-
-// formatJobCreateText formats job creation result as text.
-func formatJobCreateText(job *batchv1.Job) string {
-	var buf bytes.Buffer
-
-	fmt.Fprintf(&buf, "Job '%s' in namespace '%s' has been created successfully.\n", job.Name, job.Namespace)
-	fmt.Fprintf(&buf, "**Name:** %s\n", job.Name)
-	fmt.Fprintf(&buf, "**Namespace:** %s\n", job.Namespace)
-	fmt.Fprintf(&buf, "**Completions:** %d/%d\n", 0, *job.Spec.Completions)
-	fmt.Fprintf(&buf, "**Parallelism:** %d\n", *job.Spec.Parallelism)
-	fmt.Fprintf(&buf, "**Backoff Limit:** %d\n", *job.Spec.BackoffLimit)
-
-	return buf.String()
-}
-
-// formatJobCreateJSON formats job creation result as JSON.
-func formatJobCreateJSON(job *batchv1.Job) (string, error) {
-	result := struct {
-		Name         string `json:"name"`
-		Namespace    string `json:"namespace"`
-		Completions  int32  `json:"completions"`
-		Parallelism  int32  `json:"parallelism"`
-		BackoffLimit int32  `json:"backoffLimit"`
-	}{
-		Name:         job.Name,
-		Namespace:    job.Namespace,
-		Completions:  *job.Spec.Completions,
-		Parallelism:  *job.Spec.Parallelism,
-		BackoffLimit: *job.Spec.BackoffLimit,
-	}
-
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }

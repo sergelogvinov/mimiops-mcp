@@ -327,35 +327,38 @@ func buildWorkloadDescribe(kind string, workload any) WorkloadDescribe {
 
 // buildConditions builds a slice of Condition from workload conditions.
 // This function handles all three workload types' condition types.
-func buildConditions(conditions any) []Condition {
+func buildConditions(conditions any) []ConditionInfo {
 	switch c := conditions.(type) {
 	case []appsv1.DeploymentCondition:
-		result := make([]Condition, 0, len(c))
+		result := make([]ConditionInfo, 0, len(c))
 		for _, cond := range c {
-			result = append(result, Condition{
-				Type:   string(cond.Type),
-				Status: string(cond.Status),
-				Reason: cond.Reason,
+			result = append(result, ConditionInfo{
+				Type:    string(cond.Type),
+				Status:  string(cond.Status),
+				Reason:  cond.Reason,
+				Message: cond.Message,
 			})
 		}
 		return result
 	case []appsv1.StatefulSetCondition:
-		result := make([]Condition, 0, len(c))
+		result := make([]ConditionInfo, 0, len(c))
 		for _, cond := range c {
-			result = append(result, Condition{
-				Type:   string(cond.Type),
-				Status: string(cond.Status),
-				Reason: cond.Reason,
+			result = append(result, ConditionInfo{
+				Type:    string(cond.Type),
+				Status:  string(cond.Status),
+				Reason:  cond.Reason,
+				Message: cond.Message,
 			})
 		}
 		return result
 	case []appsv1.DaemonSetCondition:
-		result := make([]Condition, 0, len(c))
+		result := make([]ConditionInfo, 0, len(c))
 		for _, cond := range c {
-			result = append(result, Condition{
-				Type:   string(cond.Type),
-				Status: string(cond.Status),
-				Reason: cond.Reason,
+			result = append(result, ConditionInfo{
+				Type:    string(cond.Type),
+				Status:  string(cond.Status),
+				Reason:  cond.Reason,
+				Message: cond.Message,
 			})
 		}
 		return result

@@ -1,11 +1,10 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -14,13 +13,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// LimitRangeGetResult represents the result of getting a LimitRange.
+type LimitRangeGetResult struct {
+	LimitRangeSummary
+
+	Labels      map[string]string `json:"labels,omitempty" jsonschema:"Labels of the LimitRange"`
+	Annotations map[string]string `json:"annotations,omitempty" jsonschema:"Annotations of the LimitRange"`
+	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the LimitRange"`
+}
+
 // RegisterLimitRangesGet adds the limitranges_get tool, which gets a single LimitRange's full spec.
 func RegisterLimitRangesGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("limitranges_get",
-		mcp.WithDescription("Get a single LimitRange's full spec."),
-		mcp.WithString("name", mcp.Description("limit range name"), mcp.Required()),
-		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("Get LimitRange"),
+		mcp.WithDescription("Get a single LimitRange's full spec and status."),
+		mcp.WithString("name", mcp.Description("LimitRange name"), mcp.Required()),
+		mcp.WithString("namespace", mcp.Description("namespace name"), mcp.Required()),
+		mcp.WithOutputSchema[LimitRangeGetResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -33,12 +45,6 @@ func RegisterLimitRangesGet(s *server.MCPServer, client *k8s.Client, log *slog.L
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
-		format := req.GetString("format", "text")
-
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
-
 		log.DebugContext(ctx, "limitranges_get called", "namespace", namespace, "name", name)
 
 		// Get the limit range
@@ -47,110 +53,43 @@ func RegisterLimitRangesGet(s *server.MCPServer, client *k8s.Client, log *slog.L
 			return mcp.NewToolResultErrorf("failed to get limit range '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		// Format output
-		result, err := formatLimitRangeGet(lr, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
-		}
+		// Build result
+		result := buildLimitRangeGetResult(lr)
 
-		return mcp.NewToolResultText(result), nil
+		// Build fallback text
+		fallbackText := fmt.Sprintf("LimitRange '%s' in namespace '%s' has types: %s. Age: %s.", result.Name, result.Namespace, result.Types, result.Age)
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
-// formatLimitRangeGet formats a limit range for MCP tool output.
-func formatLimitRangeGet(lr *corev1.LimitRange, format string) (string, error) {
-	if format == "json" {
-		return formatLimitRangeGetJSON(lr)
-	}
-	return formatLimitRangeGetText(lr), nil
-}
-
-// formatLimitRangeGetText formats a limit range's detailed information as key-value blocks.
-func formatLimitRangeGetText(lr *corev1.LimitRange) string {
-	var buf bytes.Buffer
-
-	fmt.Fprintf(&buf, "**Name:** %s\n", lr.Name)
-	fmt.Fprintf(&buf, "**Namespace:** %s\n", lr.Namespace)
-	fmt.Fprintf(&buf, "**Age:** %s\n", formatAge(lr.CreationTimestamp))
-
-	// Spec Limits
-	fmt.Fprintf(&buf, "\n### Spec Limits\n\n")
-	for _, limit := range lr.Spec.Limits {
-		fmt.Fprintf(&buf, "- **Type:** %s\n", limit.Type)
-		if len(limit.Min) > 0 {
-			fmt.Fprintf(&buf, "  - **Min:**")
-			for key, val := range limit.Min {
-				fmt.Fprintf(&buf, " %s=%s", key, val.String())
-			}
-			fmt.Fprintf(&buf, "\n")
-		}
-		if len(limit.Max) > 0 {
-			fmt.Fprintf(&buf, "  - **Max:**")
-			for key, val := range limit.Max {
-				fmt.Fprintf(&buf, " %s=%s", key, val.String())
-			}
-			fmt.Fprintf(&buf, "\n")
-		}
-		if len(limit.Default) > 0 {
-			fmt.Fprintf(&buf, "  - **Default:**")
-			for key, val := range limit.Default {
-				fmt.Fprintf(&buf, " %s=%s", key, val.String())
-			}
-			fmt.Fprintf(&buf, "\n")
-		}
-		if len(limit.DefaultRequest) > 0 {
-			fmt.Fprintf(&buf, "  - **DefaultRequest:**")
-			for key, val := range limit.DefaultRequest {
-				fmt.Fprintf(&buf, " %s=%s", key, val.String())
-			}
-			fmt.Fprintf(&buf, "\n")
-		}
-		if limit.MaxLimitRequestRatio != nil {
-			fmt.Fprintf(&buf, "  - **MaxLimitRequestRatio:**")
-			for key, val := range limit.MaxLimitRequestRatio {
-				fmt.Fprintf(&buf, " %s=%s", key, val.String())
-			}
-			fmt.Fprintf(&buf, "\n")
-		}
+// buildLimitRangeGetResult builds a LimitRangeGetResult from a LimitRange.
+func buildLimitRangeGetResult(lr *corev1.LimitRange) *LimitRangeGetResult {
+	result := &LimitRangeGetResult{
+		LimitRangeSummary: LimitRangeSummary{
+			Name:      lr.Name,
+			Namespace: lr.Namespace,
+			Types:     deriveLimitRangeTypes(lr),
+			Age:       formatAge(lr.CreationTimestamp),
+		},
+		Labels:      lr.Labels,
+		Annotations: lr.Annotations,
 	}
 
-	return buf.String()
-}
-
-// formatLimitRangeGetJSON formats a limit range as JSON.
-func formatLimitRangeGetJSON(lr *corev1.LimitRange) (string, error) {
-	type LimitRangeInfo struct {
-		Metadata map[string]any    `json:"metadata"`
-		Spec     map[string]any    `json:"spec"`
-		Summary  LimitRangeSummary `json:"summary"`
+	if result.Labels == nil {
+		result.Labels = make(map[string]string)
+	}
+	if result.Annotations == nil {
+		result.Annotations = make(map[string]string)
 	}
 
-	info := LimitRangeInfo{}
+	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
+		return k == "kubectl.kubernetes.io/last-applied-configuration"
+	})
 
-	// Metadata
-	info.Metadata = make(map[string]any)
-	info.Metadata["name"] = lr.Name
-	info.Metadata["namespace"] = lr.Namespace
-	info.Metadata["uid"] = string(lr.UID)
-	info.Metadata["creationTimestamp"] = lr.CreationTimestamp.String()
-	info.Metadata["labels"] = lr.Labels
-	info.Metadata["annotations"] = lr.Annotations
+	// Spec (simplified)
+	result.Spec = make(map[string]any)
+	result.Spec["limits"] = lr.Spec.Limits
 
-	// Spec
-	info.Spec = make(map[string]any)
-	info.Spec["limits"] = lr.Spec.Limits
-
-	// Summary
-	info.Summary = LimitRangeSummary{
-		Name:      lr.Name,
-		Namespace: lr.Namespace,
-		Types:     deriveLimitRangeTypes(lr),
-		Age:       formatAge(lr.CreationTimestamp),
-	}
-
-	data, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	return result
 }

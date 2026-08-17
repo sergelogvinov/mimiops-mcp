@@ -1,11 +1,10 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -14,13 +13,27 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// ResourceQuotaGetResult represents the result of getting a resource quota.
+type ResourceQuotaGetResult struct {
+	ResourceQuotaSummary
+
+	Labels      map[string]string `json:"labels" jsonschema:"Labels of the resource quota"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the resource quota"`
+	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the resource quota"`
+	Status      map[string]any    `json:"status" jsonschema:"Status of the resource quota"`
+}
+
 // RegisterResourceQuotasGet adds the resourcequotas_get tool, which gets a single ResourceQuota's full spec and status.
 func RegisterResourceQuotasGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("resourcequotas_get",
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("Get ResourceQuota"),
 		mcp.WithDescription("Get a single ResourceQuota's full spec and status."),
 		mcp.WithString("name", mcp.Description("resource quota name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[ResourceQuotaGetResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -33,12 +46,6 @@ func RegisterResourceQuotasGet(s *server.MCPServer, client *k8s.Client, log *slo
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
-		format := req.GetString("format", "text")
-
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
-
 		log.DebugContext(ctx, "resourcequotas_get called", "namespace", namespace, "name", name)
 
 		// Get the resource quota
@@ -47,94 +54,55 @@ func RegisterResourceQuotasGet(s *server.MCPServer, client *k8s.Client, log *slo
 			return mcp.NewToolResultErrorf("failed to get resource quota '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		// Format output
-		result, err := formatResourceQuotaGet(quota, format)
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
-		}
+		// Build result
+		result := buildResourceQuotaGetResult(quota)
 
-		return mcp.NewToolResultText(result), nil
+		// Build fallback text
+		fallbackText := fmt.Sprintf("ResourceQuota '%s' in namespace '%s'. Requests CPU: %s, Memory: %s. Limits CPU: %s, Memory: %s.",
+			result.Name, result.Namespace, result.RequestsCPU, result.RequestsMemory, result.LimitsCPU, result.LimitsMemory)
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }
 
-// formatResourceQuotaGet formats a resource quota for MCP tool output.
-func formatResourceQuotaGet(quota *corev1.ResourceQuota, format string) (string, error) {
-	if format == "json" {
-		return formatResourceQuotaGetJSON(quota)
-	}
-	return formatResourceQuotaGetText(quota), nil
-}
-
-// formatResourceQuotaGetText formats a resource quota's detailed information as key-value blocks.
-func formatResourceQuotaGetText(quota *corev1.ResourceQuota) string {
-	var buf bytes.Buffer
-
-	fmt.Fprintf(&buf, "**Name:** %s\n", quota.Name)
-	fmt.Fprintf(&buf, "**Namespace:** %s\n", quota.Namespace)
-	fmt.Fprintf(&buf, "**Age:** %s\n", formatAge(quota.CreationTimestamp))
-
-	// Spec Hard limits
-	fmt.Fprintf(&buf, "\n### Spec Hard Limits\n\n")
-	for key, val := range quota.Spec.Hard {
-		fmt.Fprintf(&buf, "- **%s:** %s\n", key, val.String())
-	}
-
-	// Status Used
-	fmt.Fprintf(&buf, "\n### Status Used\n\n")
-	for key, val := range quota.Status.Used {
-		fmt.Fprintf(&buf, "- **%s:** %s\n", key, val.String())
-	}
-
-	return buf.String()
-}
-
-// formatResourceQuotaGetJSON formats a resource quota as JSON.
-func formatResourceQuotaGetJSON(quota *corev1.ResourceQuota) (string, error) {
-	type ResourceQuotaInfo struct {
-		Metadata map[string]any       `json:"metadata"`
-		Spec     map[string]any       `json:"spec"`
-		Status   map[string]any       `json:"status"`
-		Summary  ResourceQuotaSummary `json:"summary"`
-	}
-
-	info := ResourceQuotaInfo{}
-
-	// Metadata
-	info.Metadata = make(map[string]any)
-	info.Metadata["name"] = quota.Name
-	info.Metadata["namespace"] = quota.Namespace
-	info.Metadata["uid"] = string(quota.UID)
-	info.Metadata["creationTimestamp"] = quota.CreationTimestamp.String()
-	info.Metadata["labels"] = quota.Labels
-	info.Metadata["annotations"] = quota.Annotations
-
-	// Spec
-	info.Spec = make(map[string]any)
-	info.Spec["hard"] = quota.Spec.Hard
-
-	// Status
-	info.Status = make(map[string]any)
-	info.Status["hard"] = quota.Status.Hard
-	info.Status["used"] = quota.Status.Used
-
-	// Summary
+// buildResourceQuotaGetResult builds a ResourceQuotaGetResult from a ResourceQuota.
+func buildResourceQuotaGetResult(quota *corev1.ResourceQuota) *ResourceQuotaGetResult {
 	used := quota.Status.Hard
 	usedStatus := quota.Status.Used
 
-	info.Summary = ResourceQuotaSummary{
-		Name:      quota.Name,
-		Namespace: quota.Namespace,
-		Age:       formatAge(quota.CreationTimestamp),
+	result := ResourceQuotaGetResult{
+		ResourceQuotaSummary: ResourceQuotaSummary{
+			Name:           quota.Name,
+			Namespace:      quota.Namespace,
+			Age:            formatAge(quota.CreationTimestamp),
+			RequestsCPU:    getQuotaValueDisplay(usedStatus, used, corev1.ResourceCPU),
+			RequestsMemory: getQuotaValueDisplay(usedStatus, used, corev1.ResourceMemory),
+			LimitsCPU:      getQuotaValueDisplay(usedStatus, used, corev1.ResourceLimitsCPU),
+			LimitsMemory:   getQuotaValueDisplay(usedStatus, used, corev1.ResourceLimitsMemory),
+		},
+		Labels:      quota.Labels,
+		Annotations: quota.Annotations,
 	}
 
-	info.Summary.RequestsCPU = getQuotaValueDisplay(usedStatus, used, corev1.ResourceCPU)
-	info.Summary.RequestsMemory = getQuotaValueDisplay(usedStatus, used, corev1.ResourceMemory)
-	info.Summary.LimitsCPU = getQuotaValueDisplay(usedStatus, used, corev1.ResourceLimitsCPU)
-	info.Summary.LimitsMemory = getQuotaValueDisplay(usedStatus, used, corev1.ResourceLimitsMemory)
-
-	data, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return "", err
+	if result.Labels == nil {
+		result.Labels = make(map[string]string)
 	}
-	return string(data), nil
+	if result.Annotations == nil {
+		result.Annotations = make(map[string]string)
+	}
+
+	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
+		return k == "kubectl.kubernetes.io/last-applied-configuration"
+	})
+
+	// Spec
+	result.Spec = make(map[string]any)
+	result.Spec["hard"] = quota.Spec.Hard
+
+	// Status
+	result.Status = make(map[string]any)
+	result.Status["hard"] = quota.Status.Hard
+	result.Status["used"] = quota.Status.Used
+
+	return &result
 }
