@@ -21,6 +21,7 @@ type ClusterNameResult struct {
 // RBAC) is needed at call time.
 func RegisterClusterName(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("cluster_name",
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),

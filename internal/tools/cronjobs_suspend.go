@@ -12,13 +12,17 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
-// RegisterCronJobsSuspend adds the cronjobs_suspend tool, which suspends a CronJob.
+// RegisterCronJobsSuspend adds the cronjobs_suspend tool, which suspends a CronJob (disables future scheduled runs).
 func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("cronjobs_suspend",
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithToolTitle("Suspend CronJob"),
 		mcp.WithDescription("Suspend a CronJob (stops future scheduled runs)."),
 		mcp.WithString("name", mcp.Description("CronJob name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
-		mcp.WithString("format", mcp.Description(`"text" or "json"`), mcp.DefaultString("text")),
+		mcp.WithOutputSchema[CronJobSuspendResumeResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -31,15 +35,9 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
-		format := req.GetString("format", "text")
-		if format != "text" && format != "json" {
-			return mcp.NewToolResultErrorf("invalid format '%s', must be 'text' or 'json'", format), nil
-		}
-
 		log.DebugContext(ctx, "cronjobs_suspend called",
 			"namespace", namespace,
 			"cronjob", name,
-			"format", format,
 		)
 
 		// Get the CronJob first
@@ -50,7 +48,10 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.
 
 		// Check if already suspended
 		if cronJob.Spec.Suspend != nil && *cronJob.Spec.Suspend {
-			return mcp.NewToolResultText(fmt.Sprintf("CronJob '%s' in namespace '%s' is already suspended.", name, namespace)), nil
+			result := CronJobSuspendResumeResult{
+				CronJobSummary: toCronJobSummary(*cronJob),
+			}
+			return mcp.NewToolResultStructured(result, fmt.Sprintf("CronJob '%s' in namespace '%s' is already suspended.", name, namespace)), nil
 		}
 
 		// Patch to suspend
@@ -60,11 +61,17 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.
 			return mcp.NewToolResultErrorf("failed to suspend CronJob '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		result, err := formatCronJobSuspendResume(cronJob, true, format)
+		// Get the updated CronJob after patch
+		updatedCronJob, err := client.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			return mcp.NewToolResultErrorf("failed to format output: %v", err), nil
+			return mcp.NewToolResultErrorf("failed to get updated CronJob '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		return mcp.NewToolResultText(result), nil
+		result := CronJobSuspendResumeResult{
+			CronJobSummary: toCronJobSummary(*updatedCronJob),
+		}
+		fallbackText := fmt.Sprintf("Suspended CronJob '%s' in namespace '%s'", name, namespace)
+
+		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
 }

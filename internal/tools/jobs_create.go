@@ -23,10 +23,10 @@ type JobsCreateResult struct {
 func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("jobs_create",
 		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithToolTitle("Create Job from CronJob"),
-		mcp.WithDescription("Create a one-off Job from a CronJob's job template (CLI equivalent: kubectl create job --from=cronjob/<name>)."),
+		mcp.WithDescription("Create a one-off Job from a CronJob's job template (CLI equivalent: kubectl create job --from=cronjob/<name>)"),
 		mcp.WithString("cronjob", mcp.Description("CronJob name to source the template from"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("job_name", mcp.Description("Job name (optional, default: <cronjob>-manual-<random4>)")),

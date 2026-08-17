@@ -55,6 +55,28 @@ func formatAge(created metav1.Time) string {
 	return fmt.Sprintf("%dd", int(diff.Hours()/24))
 }
 
+// formatAgeMin calculates the age from creation time with hours and minutes granularity.
+func formatAgeMin(created metav1.Time) string {
+	now := time.Now()
+	diff := now.Sub(created.Time)
+
+	if diff < time.Minute {
+		return "0s"
+	}
+	if diff < time.Hour {
+		return fmt.Sprintf("%dm", int(diff.Minutes()))
+	}
+	if diff < 24*time.Hour {
+		hours := int(diff.Hours())
+		minutes := int(diff.Minutes()) % 60
+		if minutes == 0 {
+			return fmt.Sprintf("%dh", hours)
+		}
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dd", int(diff.Hours()/24))
+}
+
 // formatDuration calculates the duration between two times.
 func formatDuration(end, start metav1.Time) string {
 	endTime := end.Time

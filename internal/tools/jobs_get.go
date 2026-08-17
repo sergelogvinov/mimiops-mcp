@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -27,7 +28,8 @@ func RegisterJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
-		mcp.WithDescription("Get a single Job's spec and status."),
+		mcp.WithToolTitle("Get Job"),
+		mcp.WithDescription("Get a single Job's spec and status"),
 		mcp.WithString("name", mcp.Description("Job name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[JobGetResult](),
@@ -62,20 +64,30 @@ func RegisterJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 
 // buildJobGetResult builds a JobGetResult from a Job.
 func buildJobGetResult(job *batchv1.Job) *JobGetResult {
-	result := &JobGetResult{}
+	result := &JobGetResult{
+		JobSummary:  toJobSummary(*job),
+		Labels:      job.Labels,
+		Annotations: job.Annotations,
+		Spec:        make(map[string]any),
+	}
 
-	result.Labels = job.Labels
-	result.Annotations = job.Annotations
+	if result.Labels == nil {
+		result.Labels = make(map[string]string)
+	}
+	if result.Annotations == nil {
+		result.Annotations = make(map[string]string)
+	}
+
+	// Remove internal annotations
+	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
+		return k == "kubectl.kubernetes.io/last-applied-configuration"
+	})
 
 	// Spec (simplified)
-	result.Spec = make(map[string]any)
 	result.Spec["completions"] = job.Spec.Completions
 	result.Spec["parallelism"] = job.Spec.Parallelism
 	result.Spec["backoffLimit"] = job.Spec.BackoffLimit
 	result.Spec["activeDeadlineSeconds"] = job.Spec.ActiveDeadlineSeconds
-
-	// Summary
-	result.JobSummary = toJobSummary(*job)
 
 	return result
 }

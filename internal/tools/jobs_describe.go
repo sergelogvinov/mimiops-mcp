@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -20,14 +21,19 @@ type JobDescribeResult struct {
 	Labels      map[string]string `json:"labels" jsonschema:"labels of the Job"`
 	Annotations map[string]string `json:"annotations" jsonschema:"annotations of the Job"`
 	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the Job"`
-	Containers  []ContainerInfo   `json:"containers" jsonschema:"List of containers in the Job's pod template"`
-	Conditions  []ConditionInfo   `json:"conditions" jsonschema:"List of conditions of the Job"`
-	Pods        []PodInfo         `json:"pods" jsonschema:"List of pods owned by the Job with running status"`
+
+	// Containers []ContainerInfo `json:"containers" jsonschema:"List of containers in the Job's pod template"`
+	Conditions []ConditionInfo `json:"conditions" jsonschema:"List of conditions of the Job"`
+	Pods       []PodInfo       `json:"pods" jsonschema:"List of pods owned by the Job"`
 }
 
 // RegisterJobsDescribe adds the jobs_describe tool, which provides a structured Job summary.
 func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
 	tool := mcp.NewTool("jobs_describe",
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithToolTitle("Describe Job"),
 		mcp.WithDescription("Job summary (conditions, parallelism, completions, backoff, active pods list)."),
 		mcp.WithString("name", mcp.Description("Job name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
@@ -69,23 +75,27 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 
 // buildJobDescribeResult builds a JobDescribeResult from a Job.
 func buildJobDescribeResult(ctx context.Context, job *batchv1.Job, client *k8s.Client) (*JobDescribeResult, error) {
-	result := &JobDescribeResult{}
+	result := &JobDescribeResult{
+		JobSummary:  toJobSummary(*job),
+		Labels:      job.Labels,
+		Annotations: job.Annotations,
+		Spec:        make(map[string]any),
+	}
 
-	result.Labels = job.Labels
-	result.Annotations = job.Annotations
+	if result.Labels == nil {
+		result.Labels = make(map[string]string)
+	}
+	if result.Annotations == nil {
+		result.Annotations = make(map[string]string)
+	}
 
-	// Spec (simplified)
-	result.Spec = make(map[string]any)
-	result.Spec["completions"] = job.Spec.Completions
-	result.Spec["parallelism"] = job.Spec.Parallelism
-	result.Spec["backoffLimit"] = job.Spec.BackoffLimit
-	result.Spec["activeDeadlineSeconds"] = job.Spec.ActiveDeadlineSeconds
-
-	// Summary
-	result.JobSummary = toJobSummary(*job)
+	// Remove internal annotations
+	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
+		return k == "kubectl.kubernetes.io/last-applied-configuration"
+	})
 
 	// Containers
-	result.Containers = extractContainerInfo(job.Spec.Template.Spec.Containers)
+	// result.Containers = extractContainerInfo(job.Spec.Template.Spec.Containers)
 
 	// Conditions
 	result.Conditions = make([]ConditionInfo, 0, len(job.Status.Conditions))

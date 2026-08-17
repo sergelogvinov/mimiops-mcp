@@ -123,6 +123,18 @@ type WorkloadDescribe struct {
 	Age             string          `json:"age"`
 }
 
+// CronJobSummary is the trimmed, agent-friendly representation of a CronJob
+// used by cronjobs_list (and available in the JSON output of other cronjob tools).
+type CronJobSummary struct {
+	Namespace    string `json:"namespace" jsonschema:"Namespace of the CronJob"`
+	Name         string `json:"name" jsonschema:"Name of the CronJob"`
+	Schedule     string `json:"schedule" jsonschema:"Schedule of the CronJob"`
+	Suspend      bool   `json:"suspend" jsonschema:"Whether the CronJob is suspended"`
+	Status       string `json:"status" jsonschema:"Status of the CronJob"`
+	LastSchedule string `json:"lastSchedule,omitempty" jsonschema:"Last schedule time of the CronJob"`
+	Age          string `json:"age" jsonschema:"Age of the CronJob"`
+}
+
 // JobSummary is the trimmed, agent-friendly representation of a Job used by
 // jobs_list (and available in the JSON output of other job tools).
 type JobSummary struct {
