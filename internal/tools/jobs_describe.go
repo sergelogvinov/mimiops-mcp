@@ -76,7 +76,7 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 // buildJobDescribeResult builds a JobDescribeResult from a Job.
 func buildJobDescribeResult(ctx context.Context, job *batchv1.Job, client *k8s.Client) (*JobDescribeResult, error) {
 	result := &JobDescribeResult{
-		JobSummary:  toJobSummary(*job),
+		JobSummary:  toJobSummary(job),
 		Labels:      job.Labels,
 		Annotations: job.Annotations,
 		Spec:        make(map[string]any),

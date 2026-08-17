@@ -52,7 +52,7 @@ func RegisterJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 
 		// Build result
 		for _, job := range jobs.Items {
-			result.Jobs = append(result.Jobs, toJobSummary(job))
+			result.Jobs = append(result.Jobs, toJobSummary(&job))
 		}
 
 		var fallbackText string

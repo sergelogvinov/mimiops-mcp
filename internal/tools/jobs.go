@@ -7,7 +7,7 @@ import (
 )
 
 // toJobSummary converts a Job to a JobSummary.
-func toJobSummary(job batchv1.Job) JobSummary {
+func toJobSummary(job *batchv1.Job) JobSummary {
 	completions := fmt.Sprintf("%d/1", job.Status.Succeeded)
 	if job.Spec.Completions != nil {
 		completions = fmt.Sprintf("%d/%d", job.Status.Succeeded, *job.Spec.Completions)
@@ -29,7 +29,7 @@ func toJobSummary(job batchv1.Job) JobSummary {
 }
 
 // deriveJobStatus derives the status string for a Job.
-func deriveJobStatus(job batchv1.Job) string {
+func deriveJobStatus(job *batchv1.Job) string {
 	if job.Spec.Completions != nil && job.Status.Succeeded > 0 && job.Status.Succeeded == *job.Spec.Completions {
 		return "Complete"
 	}

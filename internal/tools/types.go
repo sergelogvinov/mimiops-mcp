@@ -196,3 +196,10 @@ type ConditionInfo struct {
 	Reason  string `json:"reason,omitempty" jsonschema:"Reason for the condition"`
 	Message string `json:"message,omitempty" jsonschema:"Message describing the condition"`
 }
+
+// LogStream is one pod/container log stream.
+type LogStream struct {
+	Pod       string `json:"pod" jsonschema:"Name of the pod"`
+	Container string `json:"container" jsonschema:"Name of the container"`
+	Logs      string `json:"logs" jsonschema:"Raw log output from the container"`
+}

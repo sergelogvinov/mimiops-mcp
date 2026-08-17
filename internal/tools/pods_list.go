@@ -8,7 +8,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -83,44 +82,4 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
-}
-
-// formatReady extracts the ready status from pod status.
-func formatReady(status corev1.PodStatus) string {
-	ready := 0
-	total := len(status.ContainerStatuses)
-	for _, cs := range status.ContainerStatuses {
-		if cs.Ready {
-			ready++
-		}
-	}
-	return fmt.Sprintf("%d/%d", ready, total)
-}
-
-// containerRestartCount returns the total restart count for all containers in the pod.
-func containerRestartCount(status corev1.PodStatus) int32 {
-	total := int32(0)
-	for _, cs := range status.ContainerStatuses {
-		total += cs.RestartCount
-	}
-	return total
-}
-
-// toPodSummary converts a pod to a PodSummary.
-func toPodSummary(pod corev1.Pod) PodSummary {
-	node := pod.Spec.NodeName
-	if node == "" {
-		node = "<pending>"
-	}
-
-	return PodSummary{
-		Namespace:       pod.Namespace,
-		Name:            pod.Name,
-		Ready:           formatReady(pod.Status),
-		Status:          string(pod.Status.Phase),
-		Restarts:        containerRestartCount(pod.Status),
-		Age:             formatAge(pod.CreationTimestamp),
-		Node:            node,
-		OwnerReferences: ownerReferences(&pod),
-	}
 }

@@ -70,7 +70,7 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		}
 
 		result := JobsCreateResult{
-			JobSummary: toJobSummary(*job),
+			JobSummary: toJobSummary(job),
 		}
 		fallbackText := fmt.Sprintf("Created Job '%s' in namespace '%s'", finalJobName, namespace)
 

@@ -65,7 +65,7 @@ func RegisterJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 // buildJobGetResult builds a JobGetResult from a Job.
 func buildJobGetResult(job *batchv1.Job) *JobGetResult {
 	result := &JobGetResult{
-		JobSummary:  toJobSummary(*job),
+		JobSummary:  toJobSummary(job),
 		Labels:      job.Labels,
 		Annotations: job.Annotations,
 		Spec:        make(map[string]any),
