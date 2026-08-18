@@ -20,24 +20,19 @@ package k8s
 import (
 	"fmt"
 
+	"github.com/sergelogvinov/mimiops-mcp/internal/config"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
-
-// Config holds Kubernetes client configuration.
-type Config struct {
-	Kubeconfig string
-	Context    string
-	Namespace  string
-	// Impersonate overrides the user to act-as for all requests.
-	Impersonate string
-}
 
 // Client is a Kubernetes clientset plus the resolved identity of the active
 // context/cluster/namespace, so callers can report *what* they are talking to.
 type Client struct {
 	kubernetes.Interface
+
+	configFlags *genericclioptions.ConfigFlags
 
 	// ContextName is the resolved active context (from --context or current-context).
 	ContextName string
@@ -64,23 +59,13 @@ type UserInfo struct {
 }
 
 // NewClient builds a typed Kubernetes client from the supplied config, resolving
-// the active context, cluster, and namespace via k8s.io/client-go/tools/clientcmd.
-func NewClient(cfg *Config) (*Client, error) {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	loadingRules.ExplicitPath = cfg.Kubeconfig
-
-	overrides := &clientcmd.ConfigOverrides{
-		CurrentContext: cfg.Context,
-		AuthInfo: clientcmdapi.AuthInfo{
-			Impersonate: cfg.Impersonate,
-		},
-	}
-
-	clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
+// the active context, cluster, and namespace via k8s.io/cli-runtime/pkg/genericclioptions.
+func NewClient(cfg *config.Config) (*Client, error) {
+	clientConfig := cfg.ConfigFlags.ToRawKubeConfigLoader()
 
 	restConfig, err := clientConfig.ClientConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build REST config: %w", err)
+		return nil, fmt.Errorf("failed to get REST config: %w", err)
 	}
 
 	clientSet, err := kubernetes.NewForConfig(restConfig)
@@ -88,18 +73,29 @@ func NewClient(cfg *Config) (*Client, error) {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
-	resolved, err := resolveContext(loadingRules, cfg)
+	resolved, err := resolveContext(cfg.ConfigFlags)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
+		configFlags: cfg.ConfigFlags,
 		Interface:   clientSet,
 		ContextName: resolved.context,
 		ClusterName: resolved.cluster,
 		Namespace:   resolved.namespace,
 		User:        resolved.user,
 	}, nil
+}
+
+// ToRawKubeConfigLoader returns the underlying ConfigFlags for k8s client creation.
+func (c *Client) ToRawKubeConfigLoader() *genericclioptions.ConfigFlags {
+	return c.configFlags
+}
+
+// ToRESTConfig returns the REST config for the active context, cluster, and namespace.
+func (c *Client) ToRESTConfig() (*rest.Config, error) {
+	return c.configFlags.ToRESTConfig()
 }
 
 type resolvedIdentity struct {
@@ -111,18 +107,32 @@ type resolvedIdentity struct {
 
 // resolveContext loads the merged kubeconfig and extracts the active context's
 // cluster and default namespace, honoring overrides from flags.
-func resolveContext(loadingRules *clientcmd.ClientConfigLoadingRules, cfg *Config) (*resolvedIdentity, error) {
+func resolveContext(configFlags *genericclioptions.ConfigFlags) (*resolvedIdentity, error) {
+	// Load the raw config using clientcmd for detailed identity resolution
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if configFlags.KubeConfig != nil {
+		loadingRules.ExplicitPath = *configFlags.KubeConfig
+	}
 	raw, err := loadingRules.Load()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load kubeconfig: %w", err)
 	}
 
-	contextName := cfg.Context
+	// Determine the active context
+	contextName := ""
+	if configFlags.Context != nil {
+		contextName = *configFlags.Context
+	}
 	if contextName == "" {
 		contextName = raw.CurrentContext
 	}
 
-	namespace := cfg.Namespace
+	// Determine the namespace
+	namespace := ""
+	if configFlags.Namespace != nil {
+		namespace = *configFlags.Namespace
+	}
+
 	cluster := ""
 	user := UserInfo{}
 
@@ -149,7 +159,10 @@ func resolveContext(loadingRules *clientcmd.ClientConfigLoadingRules, cfg *Confi
 
 	// Resolve the effective impersonation: flag override wins, else the
 	// kubeconfig AuthInfo.Impersonate.
-	impersonate := cfg.Impersonate
+	impersonate := ""
+	if configFlags.Impersonate != nil {
+		impersonate = *configFlags.Impersonate
+	}
 	if impersonate == "" {
 		impersonate = user.Impersonate
 	}

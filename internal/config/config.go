@@ -17,12 +17,11 @@ limitations under the License.
 // Package config defines the configuration structure for the mimiops-mcp server.
 package config
 
+import "k8s.io/cli-runtime/pkg/genericclioptions"
+
 // Config holds the configuration for the mimiops-mcp server.
 type Config struct {
-	Kubeconfig       string
-	Context          string
-	Namespace        string
-	Impersonate      string
+	ConfigFlags      *genericclioptions.ConfigFlags
 	Port             int
 	AllowDestructive bool
 	LogLevel         string

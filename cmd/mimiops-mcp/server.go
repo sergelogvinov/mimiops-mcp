@@ -20,12 +20,7 @@ func newServerCmd(flags *Flags) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := flags.Config()
 
-			client, err := k8s.NewClient(&k8s.Config{
-				Kubeconfig:  cfg.Kubeconfig,
-				Context:     cfg.Context,
-				Namespace:   cfg.Namespace,
-				Impersonate: cfg.Impersonate,
-			})
+			client, err := k8s.NewClient(cfg)
 			if err != nil {
 				return err
 			}

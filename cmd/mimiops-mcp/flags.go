@@ -6,39 +6,37 @@ import (
 
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
 	"github.com/spf13/pflag"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 const (
-	flagKubeconfig       = "kubeconfig"
-	flagContext          = "context"
-	flagNamespace        = "namespace"
-	flagImpersonate      = "impersonate"
 	flagAllowDestructive = "allow-destructive"
 	flagLogLevel         = "log-level"
 	flagLogFormat        = "log-format"
 	flagPort             = "port"
 
+	envAllowDestructive = "ALLOW_DESTRUCTIVE"
+	envLogLevel         = "LOG_LEVEL"
+	envLogFormat        = "LOG_FORMAT"
+	envPort             = "PORT"
+
 	envKubeconfig  = "KUBECONFIG"
 	envContext     = "CONTEXT"
 	envNamespace   = "NAMESPACE"
-	envImpersonate = "IMPERSONATE"
-	envLogLevel    = "LOG_LEVEL"
-	envLogFormat   = "LOG_FORMAT"
-	envPort        = "PORT"
+	envImpersonate = "AS"
 )
 
 const (
-	defaultLogLevel  = "info"
-	defaultLogFormat = "text"
-	defaultPort      = 8080
+	defaultLogLevel         = "info"
+	defaultLogFormat        = "text"
+	defaultPort             = 8080
+	defaultAllowDestructive = false
 )
 
-// Flags represents the command-line flags for the mimiops-mcp server.
+// Flags wraps genericclioptions.ConfigFlags and adds application-specific flags.
 type Flags struct {
-	Kubeconfig       string
-	Context          string
-	Namespace        string
-	Impersonate      string
+	configFlags *genericclioptions.ConfigFlags
+
 	AllowDestructive bool
 	LogLevel         string
 	LogFormat        string
@@ -48,23 +46,34 @@ type Flags struct {
 // DefaultFlags returns the default flags for the command,
 // populated from environment variables where applicable.
 func DefaultFlags() *Flags {
+	configFlags := genericclioptions.NewConfigFlags(true)
+
+	// Set defaults from environment variables
+	kubeconfig := withDefaultEnv(envKubeconfig, "")
+	context := withDefaultEnv(envContext, "")
+	namespace := withDefaultEnv(envNamespace, "")
+	impersonate := withDefaultEnv(envImpersonate, "")
+
+	configFlags.KubeConfig = &kubeconfig
+	configFlags.Context = &context
+	configFlags.Namespace = &namespace
+	configFlags.Impersonate = &impersonate
+
 	return &Flags{
-		Kubeconfig:  withDefaultEnv(envKubeconfig, ""),
-		Context:     withDefaultEnv(envContext, ""),
-		Namespace:   withDefaultEnv(envNamespace, ""),
-		Impersonate: withDefaultEnv(envImpersonate, ""),
-		LogLevel:    withDefaultEnv(envLogLevel, defaultLogLevel),
-		LogFormat:   withDefaultEnv(envLogFormat, defaultLogFormat),
-		Port:        withDefaultEnvInt(envPort, defaultPort),
+		configFlags:      configFlags,
+		AllowDestructive: withDefaultEnvBool(envAllowDestructive, defaultAllowDestructive),
+		LogLevel:         withDefaultEnv(envLogLevel, defaultLogLevel),
+		LogFormat:        withDefaultEnv(envLogFormat, defaultLogFormat),
+		Port:             withDefaultEnvInt(envPort, defaultPort),
 	}
 }
 
 // AddPersistentFlags adds the global flags shared by every subcommand.
 func (f *Flags) AddPersistentFlags(flags *pflag.FlagSet) {
-	flags.StringVarP(&f.Kubeconfig, flagKubeconfig, "", f.Kubeconfig, "path to kubeconfig file (default: $KUBECONFIG or ~/.kube/config)")
-	flags.StringVarP(&f.Context, flagContext, "", f.Context, "kubernetes context to use (default: current-context)")
-	flags.StringVarP(&f.Namespace, flagNamespace, "n", f.Namespace, "kubernetes namespace scope (default: all namespaces)")
-	flags.StringVarP(&f.Impersonate, flagImpersonate, "", f.Impersonate, "username to impersonate for the operation (default: kubeconfig act-as)")
+	// Add Kubernetes flags from genericclioptions
+	f.configFlags.AddFlags(flags)
+
+	// Add application-specific flags
 	flags.BoolVarP(&f.AllowDestructive, flagAllowDestructive, "", f.AllowDestructive, "allow destructive operations (default: false)")
 	flags.StringVarP(&f.LogLevel, flagLogLevel, "", f.LogLevel, "log level: debug, info, warn, error (default: info)")
 	flags.StringVarP(&f.LogFormat, flagLogFormat, "", f.LogFormat, "log output format: text, json (default: text)")
@@ -78,10 +87,7 @@ func (f *Flags) AddServerFlags(flags *pflag.FlagSet) {
 // Config returns the internal config populated from the parsed flags.
 func (f *Flags) Config() *config.Config {
 	return &config.Config{
-		Kubeconfig:       f.Kubeconfig,
-		Context:          f.Context,
-		Namespace:        f.Namespace,
-		Impersonate:      f.Impersonate,
+		ConfigFlags:      f.configFlags,
 		Port:             f.Port,
 		AllowDestructive: f.AllowDestructive,
 		LogLevel:         f.LogLevel,
@@ -89,11 +95,15 @@ func (f *Flags) Config() *config.Config {
 	}
 }
 
+// ToRawKubeConfigLoader returns the underlying ConfigFlags for k8s client creation.
+func (f *Flags) ToRawKubeConfigLoader() *genericclioptions.ConfigFlags {
+	return f.configFlags
+}
+
 func withDefaultEnv(key string, def string) string {
 	if val, ok := os.LookupEnv(key); ok {
 		return val
 	}
-
 	return def
 }
 
@@ -103,6 +113,18 @@ func withDefaultEnvInt(key string, def int) int {
 			return n
 		}
 	}
+	return def
+}
 
+func withDefaultEnvBool(key string, def bool) bool {
+	if val, ok := os.LookupEnv(key); ok {
+		// Parse common truthy/falsy values
+		switch val {
+		case "true", "1", "yes", "on":
+			return true
+		case "false", "0", "no", "off":
+			return false
+		}
+	}
 	return def
 }
