@@ -59,9 +59,9 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		pods, err := client.CoreV1().Pods(namespace).List(ctx, opts)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return mcp.NewToolResultErrorf("no pods found in namespace '%s'", namespace), nil
+				return mcp.NewToolResultErrorf("no pods found"), nil
 			}
-			return mcp.NewToolResultErrorf("failed to list pods in namespace '%s': %v", namespace, err), nil
+			return mcp.NewToolResultErrorf("failed to list pods: %v", err), nil
 		}
 
 		result := PodsListResult{

@@ -45,9 +45,9 @@ func RegisterJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		jobs, err := client.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return mcp.NewToolResultErrorf("no Jobs found in namespace '%s'", namespace), nil
+				return mcp.NewToolResultErrorf("no Jobs found"), nil
 			}
-			return mcp.NewToolResultErrorf("failed to list Jobs in namespace '%s': %v", namespace, err), nil
+			return mcp.NewToolResultErrorf("failed to list Jobs: %v", err), nil
 		}
 
 		result := JobsListResult{

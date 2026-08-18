@@ -57,9 +57,9 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		events, err := client.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{FieldSelector: fieldSelector})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return mcp.NewToolResultErrorf("no events found in namespace '%s'", namespace), nil
+				return mcp.NewToolResultErrorf("no Events found"), nil
 			}
-			return mcp.NewToolResultErrorf("failed to list events in namespace '%s': %v", namespace, err), nil
+			return mcp.NewToolResultErrorf("failed to list events: %v", err), nil
 		}
 
 		// Sort events: warnings first, then by lastTimestamp descending

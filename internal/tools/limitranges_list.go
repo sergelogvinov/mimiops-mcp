@@ -42,9 +42,9 @@ func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client, log *slog.
 		ranges, err := client.CoreV1().LimitRanges(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return mcp.NewToolResultErrorf("no limit ranges found in namespace '%s'", namespace), nil
+				return mcp.NewToolResultErrorf("no Limit Ranges found"), nil
 			}
-			return mcp.NewToolResultErrorf("failed to list limit ranges in namespace '%s': %v", namespace, err), nil
+			return mcp.NewToolResultErrorf("failed to list limit ranges: %v", err), nil
 		}
 
 		result := LimitRangesListResult{

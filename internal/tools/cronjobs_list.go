@@ -41,9 +41,9 @@ func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		cronJobs, err := client.BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return mcp.NewToolResultErrorf("no CronJobs found in namespace '%s'", namespace), nil
+				return mcp.NewToolResultErrorf("no CronJobs found"), nil
 			}
-			return mcp.NewToolResultErrorf("failed to list CronJobs in namespace '%s': %v", namespace, err), nil
+			return mcp.NewToolResultErrorf("failed to list CronJobs: %v", err), nil
 		}
 
 		result := CronJobsListResult{

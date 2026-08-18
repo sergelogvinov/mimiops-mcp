@@ -34,7 +34,7 @@ func RegisterStorageClassesList(s *server.MCPServer, client *k8s.Client, log *sl
 		classes, err := client.StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return mcp.NewToolResultErrorf("no storage classes found"), nil
+				return mcp.NewToolResultErrorf("no Storage Classes found"), nil
 			}
 			return mcp.NewToolResultErrorf("failed to list storage classes: %v", err), nil
 		}

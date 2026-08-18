@@ -41,9 +41,9 @@ func RegisterResourceQuotasList(s *server.MCPServer, client *k8s.Client, log *sl
 		quotas, err := client.CoreV1().ResourceQuotas(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return mcp.NewToolResultErrorf("no resource quotas found in namespace '%s'", namespace), nil
+				return mcp.NewToolResultErrorf("no Resource Quotas found"), nil
 			}
-			return mcp.NewToolResultErrorf("failed to list resource quotas in namespace '%s': %v", namespace, err), nil
+			return mcp.NewToolResultErrorf("failed to list resource quotas: %v", err), nil
 		}
 
 		result := ResourceQuotasListResult{

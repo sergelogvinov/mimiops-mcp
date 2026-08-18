@@ -34,7 +34,7 @@ func RegisterPriorityClassesList(s *server.MCPServer, client *k8s.Client, log *s
 		classes, err := client.SchedulingV1().PriorityClasses().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return mcp.NewToolResultErrorf("no priority classes found"), nil
+				return mcp.NewToolResultErrorf("no Priority Classes found"), nil
 			}
 			return mcp.NewToolResultErrorf("failed to list priority classes: %v", err), nil
 		}
