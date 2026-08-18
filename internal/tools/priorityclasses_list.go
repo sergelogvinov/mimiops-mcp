@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,6 +33,9 @@ func RegisterPriorityClassesList(s *server.MCPServer, client *k8s.Client, log *s
 		// List priority classes
 		classes, err := client.SchedulingV1().PriorityClasses().List(ctx, metav1.ListOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("no priority classes found"), nil
+			}
 			return mcp.NewToolResultErrorf("failed to list priority classes: %v", err), nil
 		}
 

@@ -2,19 +2,16 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // PodLogResult is the structured result of pods_log.
 type PodLogResult struct {
-	PodSummary
-
 	Streams []LogStream `json:"streams" jsonschema:"Log streams from the pod's containers"`
 }
 
@@ -32,7 +29,6 @@ func RegisterPodsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		mcp.WithInteger("tail", mcp.Description("number of lines to show from end of logs"), mcp.DefaultNumber(20)),
 		mcp.WithBoolean("previous", mcp.Description("return previous terminated container logs"), mcp.DefaultBool(false)),
 		mcp.WithInteger("since_seconds", mcp.Description("only return logs newer than N seconds"), mcp.DefaultNumber(0)),
-		mcp.WithOutputSchema[PodLogResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -59,24 +55,15 @@ func RegisterPodsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 			"since_seconds", sinceSeconds,
 		)
 
-		pod, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return mcp.NewToolResultErrorf("failed to get pod '%s' in namespace '%s': %v", name, namespace, err), nil
-		}
-
 		// Get pod to check container name
 		stream, err := fetchPodLogStream(ctx, client, namespace, name, container, tail, sinceSeconds, previous)
 		if err != nil {
-			return mcp.NewToolResultErrorf("failed to fetch logs for pod '%s': %v", name, err), nil
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("pod '%s' in namespace '%s' not found", name, namespace), nil
+			}
+			return mcp.NewToolResultErrorf("failed to fetch logs for pod '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		// Build result
-		result := PodLogResult{
-			PodSummary: toPodSummary(ctx, client, pod),
-			Streams:    []LogStream{stream},
-		}
-		fallback := fmt.Sprintf("Pod '%s' in namespace '%s' has %d log stream(s).", name, namespace, len(result.Streams))
-
-		return mcp.NewToolResultStructured(result, fallback), nil
+		return mcp.NewToolResultText(stream.Logs), nil
 	})
 }

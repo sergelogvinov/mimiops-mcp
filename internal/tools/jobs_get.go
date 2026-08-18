@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	batchv1 "k8s.io/api/batch/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -52,6 +53,9 @@ func RegisterJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 
 		job, err := client.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("Job '%s' in namespace '%s' not found", name, namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to get Job '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 

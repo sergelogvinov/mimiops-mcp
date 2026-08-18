@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,6 +45,9 @@ func RegisterNamespacesGet(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 		// Get the namespace
 		ns, err := client.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("namespace '%s' not found", name), nil
+			}
 			return mcp.NewToolResultErrorf("failed to get namespace '%s': %v", name, err), nil
 		}
 

@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -57,6 +58,9 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		// List pods
 		pods, err := client.CoreV1().Pods(namespace).List(ctx, opts)
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("no pods found in namespace '%s'", namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to list pods in namespace '%s': %v", namespace, err), nil
 		}
 

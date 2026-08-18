@@ -86,16 +86,15 @@ func getWorkloadByKind(ctx context.Context, client *k8s.Client, namespace, name,
 
 // listAllWorkloads lists all three kinds of workloads in a namespace.
 func listAllWorkloads(ctx context.Context, client *k8s.Client, namespace string, labelSelector string) ([]WorkloadSummary, error) {
-	opts := metav1.ListOptions{}
-	if labelSelector != "" {
-		opts.LabelSelector = labelSelector
+	opts := metav1.ListOptions{
+		LabelSelector: labelSelector,
 	}
 
 	var summaries []WorkloadSummary
 
 	// List deployments
 	deployments, err := client.AppsV1().Deployments(namespace).List(ctx, opts)
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to list deployments: %v", err)
 	}
 	for _, d := range deployments.Items {
@@ -104,7 +103,7 @@ func listAllWorkloads(ctx context.Context, client *k8s.Client, namespace string,
 
 	// List statefulsets
 	statefulsets, err := client.AppsV1().StatefulSets(namespace).List(ctx, opts)
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to list statefulsets: %v", err)
 	}
 	for _, s := range statefulsets.Items {
@@ -113,7 +112,7 @@ func listAllWorkloads(ctx context.Context, client *k8s.Client, namespace string,
 
 	// List daemonsets
 	daemonsets, err := client.AppsV1().DaemonSets(namespace).List(ctx, opts)
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to list daemonsets: %v", err)
 	}
 	for _, d := range daemonsets.Items {

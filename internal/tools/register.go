@@ -39,6 +39,7 @@ func RegisterTools(srv *server.MCPServer, client *k8s.Client, log *slog.Logger, 
 	RegisterWorkloadsDescribe(srv, client, log)
 	if allowDestructive {
 		RegisterPodsDelete(srv, client, log)
+		RegisterJobsDelete(srv, client, log)
 		RegisterCronJobsSuspend(srv, client, log)
 		RegisterCronJobsResume(srv, client, log)
 		RegisterWorkloadsScale(srv, client, log)

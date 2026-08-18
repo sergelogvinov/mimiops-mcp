@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,6 +33,9 @@ func RegisterNodesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		// List nodes
 		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("no nodes found"), nil
+			}
 			return mcp.NewToolResultErrorf("failed to list nodes: %v", err), nil
 		}
 

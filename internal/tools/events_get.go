@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -55,6 +56,9 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		// List events
 		events, err := client.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{FieldSelector: fieldSelector})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("no events found in namespace '%s'", namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to list events in namespace '%s': %v", namespace, err), nil
 		}
 

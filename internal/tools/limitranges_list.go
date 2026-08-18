@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -40,6 +41,9 @@ func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client, log *slog.
 		// List limit ranges
 		ranges, err := client.CoreV1().LimitRanges(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("no limit ranges found in namespace '%s'", namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to list limit ranges in namespace '%s': %v", namespace, err), nil
 		}
 

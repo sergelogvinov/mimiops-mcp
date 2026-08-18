@@ -110,18 +110,16 @@ type WorkloadDetails struct {
 
 // WorkloadDescribe is the structured output for workloads_describe in JSON format.
 type WorkloadDescribe struct {
-	Kind            string          `json:"kind"`
-	Namespace       string          `json:"namespace"`
-	Name            string          `json:"name"`
-	Replicas        Replicas        `json:"replicas"`
-	Selector        string          `json:"selector"`
-	Service         string          `json:"service,omitempty"`
-	UpdateStrategy  string          `json:"update_strategy"`
-	Conditions      []ConditionInfo `json:"conditions,omitempty"`
-	UpdateHistory   int             `json:"update_history_limit,omitempty"`
-	RevisionHistory int             `json:"revision_history_limit,omitempty"`
-	PodTemplate     PodTemplate     `json:"pod_template"`
-	Age             string          `json:"age"`
+	Kind           string          `json:"kind"`
+	Namespace      string          `json:"namespace"`
+	Name           string          `json:"name"`
+	Replicas       Replicas        `json:"replicas"`
+	Selector       string          `json:"selector"`
+	Service        string          `json:"service,omitempty"`
+	UpdateStrategy string          `json:"update_strategy"`
+	Conditions     []ConditionInfo `json:"conditions,omitempty"`
+	PodTemplate    PodTemplate     `json:"pod_template"`
+	Age            string          `json:"age"`
 }
 
 // CronJobSummary is the trimmed, agent-friendly representation of a CronJob

@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // WorkloadDescribeResult represents the result of describing a workload.
@@ -62,6 +63,9 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client, log *slo
 		// Get the workload
 		workload, err := getWorkloadByKind(ctx, client, namespace, name, resolvedKind)
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("%s '%s' not found in namespace '%s'", resolvedKind, name, namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to get %s '%s' in namespace '%s': %v", resolvedKind, name, namespace, err), nil
 		}
 
@@ -90,8 +94,6 @@ func buildWorkloadDescribeResult(workload any, kind string) *WorkloadDescribeRes
 		result.Service = w.Name
 		result.UpdateStrategy = string(w.Spec.Strategy.Type)
 		result.Conditions = buildConditions(w.Status.Conditions)
-		result.UpdateHistory = int(w.Status.ObservedGeneration)
-		result.RevisionHistory = int(*w.Spec.RevisionHistoryLimit)
 		result.PodTemplate = buildPodTemplate(w.Spec)
 		result.Age = formatAge(w.CreationTimestamp)
 
@@ -107,8 +109,6 @@ func buildWorkloadDescribeResult(workload any, kind string) *WorkloadDescribeRes
 		result.Service = w.Spec.ServiceName
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
 		result.Conditions = buildConditions(w.Status.Conditions)
-		result.UpdateHistory = int(w.Status.ObservedGeneration)
-		result.RevisionHistory = int(*w.Spec.RevisionHistoryLimit)
 		result.PodTemplate = buildPodTemplate(w.Spec)
 		result.Age = formatAge(w.CreationTimestamp)
 
@@ -123,8 +123,6 @@ func buildWorkloadDescribeResult(workload any, kind string) *WorkloadDescribeRes
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
 		result.Conditions = buildConditions(w.Status.Conditions)
-		result.UpdateHistory = int(w.Status.ObservedGeneration)
-		result.RevisionHistory = int(*w.Spec.RevisionHistoryLimit)
 		result.PodTemplate = buildPodTemplate(w.Spec)
 		result.Age = formatAge(w.CreationTimestamp)
 	}

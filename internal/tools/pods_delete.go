@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,7 +30,6 @@ func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithInteger("grace_period_seconds", mcp.Description("grace period in seconds"), mcp.DefaultNumber(30)),
-		mcp.WithBoolean("confirm", mcp.Description("set to true to confirm deletion"), mcp.DefaultBool(false)),
 		mcp.WithOutputSchema[PodDeleteResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -44,27 +44,12 @@ func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		}
 
 		gracePeriodSeconds := req.GetInt("grace_period_seconds", 30)
-		confirm := req.GetBool("confirm", false)
 
 		log.DebugContext(ctx, "pods_delete called",
 			"namespace", namespace,
 			"pod", name,
 			"grace_period_seconds", gracePeriodSeconds,
-			"confirm", confirm,
 		)
-
-		// Check if destructive operations are allowed
-		// This should be checked at registration time via allowDestructive flag
-		// But we also check here as a safety measure
-		if !confirm {
-			result := PodDeleteResult{
-				Name:      name,
-				Namespace: namespace,
-				Deleted:   false,
-			}
-			fallbackText := fmt.Sprintf("This will delete pod '%s' in namespace '%s'. Call again with confirm=true to proceed.", name, namespace)
-			return mcp.NewToolResultStructured(result, fallbackText), nil
-		}
 
 		// Delete the pod - convert int to int64
 		gracePeriodSecondsInt64 := int64(gracePeriodSeconds)
@@ -72,6 +57,9 @@ func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 			GracePeriodSeconds: &gracePeriodSecondsInt64,
 		})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("pod '%s' in namespace '%s' not found", name, namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to delete pod '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 

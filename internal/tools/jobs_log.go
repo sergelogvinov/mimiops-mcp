@@ -2,20 +2,18 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // JobLogResult is the structured result of jobs_log.
 type JobLogResult struct {
-	JobSummary
-
 	Streams []LogStream `json:"streams" jsonschema:"Log streams from the Job's pods"`
 }
 
@@ -63,6 +61,9 @@ func RegisterJobsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		// Get the Job
 		job, err := client.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("Job '%s' in namespace '%s' not found", name, namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to get Job '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
@@ -82,12 +83,7 @@ func RegisterJobsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 
 		// Build result with empty streams if no pods
 		if len(ownedPods) == 0 {
-			result := JobLogResult{
-				JobSummary: toJobSummary(job),
-				Streams:    []LogStream{},
-			}
-			fallback := fmt.Sprintf("Job '%s' in namespace '%s' has no pods yet (not started or already cleaned up).", name, namespace)
-			return mcp.NewToolResultStructured(result, fallback), nil
+			return mcp.NewToolResultErrorf("Job '%s' in namespace '%s' has no pods yet (not started or already cleaned up)", name, namespace), nil
 		}
 
 		// Determine which pods to fetch logs from
@@ -115,14 +111,6 @@ func RegisterJobsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 			streams = append(streams, stream)
 		}
 
-		// Build result
-		result := JobLogResult{
-			JobSummary: toJobSummary(job),
-			Streams:    streams,
-		}
-
-		fallback := fmt.Sprintf("Job '%s' in namespace '%s' has %d log stream(s).", name, namespace, len(streams))
-
-		return mcp.NewToolResultStructured(result, fallback), nil
+		return mcp.NewToolResultStructuredOnly(JobLogResult{Streams: streams}), nil
 	})
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	batchv1 "k8s.io/api/batch/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -54,6 +55,9 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		// Get the CronJob
 		cronJob, err := client.BatchV1().CronJobs(namespace).Get(ctx, cronjobName, metav1.GetOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("CronJob '%s' in namespace '%s' not found", cronjobName, namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to get CronJob '%s' in namespace '%s': %v", cronjobName, namespace, err), nil
 		}
 

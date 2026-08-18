@@ -58,7 +58,7 @@ func fetchPodLogStream(ctx context.Context, client *k8s.Client, namespace, podNa
 	// Get pod to check container names
 	pod, err := client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
-		return LogStream{}, fmt.Errorf("failed to get pod '%s': %v", podName, err)
+		return LogStream{}, err
 	}
 
 	if container == "" {

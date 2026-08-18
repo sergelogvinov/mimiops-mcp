@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
@@ -43,6 +44,9 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.
 		// Get the CronJob first
 		cronJob, err := client.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("CronJob '%s' in namespace '%s' not found", name, namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to get CronJob '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
@@ -64,6 +68,9 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.
 		// Get the updated CronJob after patch
 		updatedCronJob, err := client.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("CronJob '%s' in namespace '%s' not found after patch", name, namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to get updated CronJob '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	batchv1 "k8s.io/api/batch/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,6 +40,9 @@ func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		// List CronJobs
 		cronJobs, err := client.BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return mcp.NewToolResultErrorf("no CronJobs found in namespace '%s'", namespace), nil
+			}
 			return mcp.NewToolResultErrorf("failed to list CronJobs in namespace '%s': %v", namespace, err), nil
 		}
 
