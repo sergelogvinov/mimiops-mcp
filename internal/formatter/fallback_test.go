@@ -19,12 +19,21 @@ type Replicas struct {
 }
 
 type PodSummary struct {
+	PodSpec
+
 	Namespace       string            `json:"namespace" jsonschema:"namespace"`
 	Name            string            `json:"name" jsonschema:"name"`
 	Labels          map[string]string `json:"labels,omitempty" jsonschema:"labels"`
 	Ready           string            `json:"ready" jsonschema:"ready"`
 	Restarts        int32             `json:"restarts" jsonschema:"restarts"`
 	OwnerReferences []OwnerReference  `json:"ownerReferences,omitempty" jsonschema:"ownerReferences"`
+}
+
+type PodSpec struct {
+	RestartPolicy     string   `json:"restart_policy,omitempty" jsonschema:"restart policy"`
+	ServiceAccount    string   `json:"service_account,omitempty" jsonschema:"ServiceAccount"`
+	PriorityClassName string   `json:"priority_class_name,omitempty" jsonschema:"PriorityClassName"`
+	Volumes           []string `json:"volumes,omitempty" jsonschema:"List of volumes names"`
 }
 
 func TestToMarkdown(t *testing.T) {
@@ -86,6 +95,42 @@ func TestToMarkdown(t *testing.T) {
 				},
 			},
 			expectedOutput: `- **namespace**: default
+- **name**: my-pod
+- **ready**: 1/1
+- **restarts**: 0
+- **ownerReferences**: 
+    | apiVersion | kind | name |
+    | --- | --- | --- |
+    | v1 | Deployment | my-deployment |
+
+`,
+		},
+		{
+			name: "struct with pod spec",
+			input: PodSummary{
+				Namespace: "default",
+				Name:      "my-pod",
+				Ready:     "1/1",
+				Restarts:  0,
+				OwnerReferences: []OwnerReference{
+					{
+						APIVersion: "v1",
+						Kind:       "Deployment",
+						Name:       "my-deployment",
+					},
+				},
+				PodSpec: PodSpec{
+					RestartPolicy:     "Always",
+					ServiceAccount:    "default",
+					PriorityClassName: "high-priority",
+					Volumes:           []string{"volume1", "volume2"},
+				},
+			},
+			expectedOutput: `- **restart policy**: Always
+- **ServiceAccount**: default
+- **PriorityClassName**: high-priority
+- **List of volumes names**: volume1, volume2
+- **namespace**: default
 - **name**: my-pod
 - **ready**: 1/1
 - **restarts**: 0

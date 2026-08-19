@@ -2,14 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -75,49 +73,4 @@ func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
-}
-
-// listWorkloadsByKind lists workloads of a specific kind.
-func listWorkloadsByKind(ctx context.Context, client *k8s.Client, namespace, kind string, labelSelector string) (summaries []WorkloadSummary, err error) {
-	opts := metav1.ListOptions{
-		LabelSelector: labelSelector,
-	}
-
-	switch kind {
-	case "deployment":
-		deployments, err := client.AppsV1().Deployments(namespace).List(ctx, opts)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("no deployments found")
-			}
-			return nil, fmt.Errorf("failed to list deployments: %v", err)
-		}
-		for _, d := range deployments.Items {
-			summaries = append(summaries, toWorkloadSummaryDeployment(d))
-		}
-	case "statefulset":
-		statefulsets, err := client.AppsV1().StatefulSets(namespace).List(ctx, opts)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("no statefulsets found")
-			}
-			return nil, fmt.Errorf("failed to list statefulsets: %v", err)
-		}
-		for _, s := range statefulsets.Items {
-			summaries = append(summaries, toWorkloadSummaryStatefulSet(s))
-		}
-	case "daemonset":
-		daemonsets, err := client.AppsV1().DaemonSets(namespace).List(ctx, opts)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("no daemonsets found")
-			}
-			return nil, fmt.Errorf("failed to list daemonsets: %v", err)
-		}
-		for _, d := range daemonsets.Items {
-			summaries = append(summaries, toWorkloadSummaryDaemonSet(d))
-		}
-	}
-
-	return summaries, nil
 }

@@ -24,7 +24,7 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.
 		mcp.WithDescription("Suspend a CronJob (stops future scheduled runs)."),
 		mcp.WithString("name", mcp.Description("CronJob name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
-		mcp.WithOutputSchema[CronJobSuspendResumeResult](),
+		mcp.WithOutputSchema[CronJobSummary](),
 	)
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
@@ -53,9 +53,7 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.
 
 		// Check if already suspended
 		if cronJob.Spec.Suspend != nil && *cronJob.Spec.Suspend {
-			result := CronJobSuspendResumeResult{
-				CronJobSummary: toCronJobSummary(*cronJob),
-			}
+			result := toCronJobSummary(cronJob)
 			return mcp.NewToolResultStructured(result, fmt.Sprintf("CronJob '%s' in namespace '%s' is already suspended.", name, namespace)), nil
 		}
 
@@ -75,10 +73,7 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client, log *slog.
 			return mcp.NewToolResultErrorf("failed to get updated CronJob '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		result := CronJobSuspendResumeResult{
-			CronJobSummary: toCronJobSummary(*updatedCronJob),
-		}
-
+		result := toCronJobSummary(updatedCronJob)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }

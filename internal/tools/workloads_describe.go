@@ -14,7 +14,11 @@ import (
 
 // WorkloadDescribeResult represents the result of describing a workload.
 type WorkloadDescribeResult struct {
-	WorkloadDescribe
+	WorkloadSummary
+	WorkloadSpec
+
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 }
 
 // RegisterWorkloadsDescribe adds the workloads_describe tool, which provides
@@ -69,130 +73,37 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client, log *slo
 			return mcp.NewToolResultErrorf("failed to get %s '%s' in namespace '%s': %v", resolvedKind, name, namespace, err), nil
 		}
 
-		result := buildWorkloadDescribeResult(workload, resolvedKind)
+		result := buildWorkloadDescribeResult(workload)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 
 // buildWorkloadDescribeResult builds a WorkloadDescribeResult from a workload object.
-func buildWorkloadDescribeResult(workload any, kind string) *WorkloadDescribeResult {
+func buildWorkloadDescribeResult(workload any) *WorkloadDescribeResult {
 	result := &WorkloadDescribeResult{}
 
 	switch w := workload.(type) {
 	case *appsv1.Deployment:
-		result.Kind = kind
-		result.Namespace = w.Namespace
-		result.Name = w.Name
-		result.Replicas = Replicas{
-			Ready:   int(w.Status.ReadyReplicas),
-			Desired: int(*w.Spec.Replicas),
-		}
+		result.WorkloadSummary = toWorkloadSummaryDeployment(w)
+		result.Labels = extractLabels(w.Labels)
+		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
-		result.Service = w.Name
 		result.UpdateStrategy = string(w.Spec.Strategy.Type)
-		result.Conditions = buildConditions(w.Status.Conditions)
-		result.PodTemplate = buildPodTemplate(w.Spec)
-		result.Age = formatAge(w.CreationTimestamp)
 
 	case *appsv1.StatefulSet:
-		result.Kind = kind
-		result.Namespace = w.Namespace
-		result.Name = w.Name
-		result.Replicas = Replicas{
-			Ready:   int(w.Status.ReadyReplicas),
-			Desired: int(*w.Spec.Replicas),
-		}
+		result.WorkloadSummary = toWorkloadSummaryStatefulSet(w)
+		result.Labels = extractLabels(w.Labels)
+		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
-		result.Service = w.Spec.ServiceName
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
-		result.Conditions = buildConditions(w.Status.Conditions)
-		result.PodTemplate = buildPodTemplate(w.Spec)
-		result.Age = formatAge(w.CreationTimestamp)
 
 	case *appsv1.DaemonSet:
-		result.Kind = kind
-		result.Namespace = w.Namespace
-		result.Name = w.Name
-		result.Replicas = Replicas{
-			Ready:   int(w.Status.NumberReady),
-			Desired: int(w.Status.DesiredNumberScheduled),
-		}
+		result.WorkloadSummary = toWorkloadSummaryDaemonSet(w)
+		result.Labels = extractLabels(w.Labels)
+		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
-		result.Conditions = buildConditions(w.Status.Conditions)
-		result.PodTemplate = buildPodTemplate(w.Spec)
-		result.Age = formatAge(w.CreationTimestamp)
 	}
 
-	return result
-}
-
-// buildConditions builds a slice of ConditionInfo from workload conditions.
-// This function handles all three workload types' condition types.
-func buildConditions(conditions any) []ConditionInfo {
-	switch c := conditions.(type) {
-	case []appsv1.DeploymentCondition:
-		result := make([]ConditionInfo, 0, len(c))
-		for _, cond := range c {
-			result = append(result, ConditionInfo{
-				Type:    string(cond.Type),
-				Status:  string(cond.Status),
-				Reason:  cond.Reason,
-				Message: cond.Message,
-			})
-		}
-		return result
-	case []appsv1.StatefulSetCondition:
-		result := make([]ConditionInfo, 0, len(c))
-		for _, cond := range c {
-			result = append(result, ConditionInfo{
-				Type:    string(cond.Type),
-				Status:  string(cond.Status),
-				Reason:  cond.Reason,
-				Message: cond.Message,
-			})
-		}
-		return result
-	case []appsv1.DaemonSetCondition:
-		result := make([]ConditionInfo, 0, len(c))
-		for _, cond := range c {
-			result = append(result, ConditionInfo{
-				Type:    string(cond.Type),
-				Status:  string(cond.Status),
-				Reason:  cond.Reason,
-				Message: cond.Message,
-			})
-		}
-		return result
-	}
-	return nil
-}
-
-// buildPodTemplate builds a PodTemplate from a pod template spec.
-func buildPodTemplate(template any) PodTemplate {
-	var result PodTemplate
-	switch t := template.(type) {
-	case appsv1.DeploymentSpec:
-		result = PodTemplate{
-			Labels:         t.Template.Labels,
-			RestartPolicy:  string(t.Template.Spec.RestartPolicy),
-			ServiceAccount: t.Template.Spec.ServiceAccountName,
-			Containers:     extractContainerInfo(t.Template.Spec.Containers),
-		}
-	case appsv1.StatefulSetSpec:
-		result = PodTemplate{
-			Labels:         t.Template.Labels,
-			RestartPolicy:  string(t.Template.Spec.RestartPolicy),
-			ServiceAccount: t.Template.Spec.ServiceAccountName,
-			Containers:     extractContainerInfo(t.Template.Spec.Containers),
-		}
-	case appsv1.DaemonSetSpec:
-		result = PodTemplate{
-			Labels:         t.Template.Labels,
-			RestartPolicy:  string(t.Template.Spec.RestartPolicy),
-			ServiceAccount: t.Template.Spec.ServiceAccountName,
-			Containers:     extractContainerInfo(t.Template.Spec.Containers),
-		}
-	}
 	return result
 }

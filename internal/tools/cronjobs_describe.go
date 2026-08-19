@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"log/slog"
-	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -72,23 +71,10 @@ func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog
 // buildCronJobDescribeResult builds a CronJobDescribeResult from a CronJob.
 func buildCronJobDescribeResult(cj *batchv1.CronJob) (*CronJobDescribeResult, error) {
 	result := &CronJobDescribeResult{
-		CronJobSummary: toCronJobSummary(*cj),
+		CronJobSummary: toCronJobSummary(cj),
+		Annotations:    extractAnnotations(cj.Annotations),
+		Labels:         extractLabels(cj.Labels),
 	}
-
-	result.Labels = cj.Labels
-	result.Annotations = cj.Annotations
-
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
-	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
-	}
-
-	// Remove internal annotations
-	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
-		return k == "kubectl.kubernetes.io/last-applied-configuration"
-	})
 
 	// Spec (simplified)
 	result.Spec = make(map[string]any)

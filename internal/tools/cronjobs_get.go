@@ -2,8 +2,8 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -17,10 +17,10 @@ import (
 // CronJobGetResult represents the result of getting a single CronJob.
 type CronJobGetResult struct {
 	CronJobSummary
+	CronJobSpec
 
-	Labels      map[string]string `json:"labels" jsonschema:"Labels of the CronJob"`
-	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the CronJob"`
-	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the CronJob"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 }
 
 // RegisterCronJobsGet adds the cronjobs_get tool, which gets a single CronJob's full spec and status.
@@ -67,29 +67,32 @@ func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logg
 // buildCronJobGetResult builds a CronJobGetResult from a CronJob.
 func buildCronJobGetResult(cj *batchv1.CronJob) *CronJobGetResult {
 	result := &CronJobGetResult{
-		CronJobSummary: toCronJobSummary(*cj),
-		Labels:         cj.Labels,
-		Annotations:    cj.Annotations,
-		Spec:           make(map[string]any),
+		CronJobSummary: toCronJobSummary(cj),
+		Annotations:    extractAnnotations(cj.Annotations),
+		Labels:         extractLabels(cj.Labels),
+		CronJobSpec: CronJobSpec{
+			Selector:          formatMatchLabels(cj.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels),
+			ConcurrencyPolicy: string(cj.Spec.ConcurrencyPolicy),
+			PodSpec: PodSpec{
+				RestartPolicy:     string(cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy),
+				ServiceAccount:    cj.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName,
+				PriorityClassName: cj.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName,
+				InitContainers:    toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.InitContainers),
+				Containers:        toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.Containers),
+				Volumes:           extractVolumeNames(cj.Spec.JobTemplate.Spec.Template.Spec.Volumes),
+			},
+		},
 	}
 
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
+	if cj.Spec.StartingDeadlineSeconds != nil {
+		result.CronJobSpec.StartingDeadlineSeconds = fmt.Sprintf("%d", *cj.Spec.StartingDeadlineSeconds)
 	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
+	if cj.Spec.SuccessfulJobsHistoryLimit != nil {
+		result.CronJobSpec.SuccessfulJobsHistoryLimit = fmt.Sprintf("%d", *cj.Spec.SuccessfulJobsHistoryLimit)
 	}
-
-	// Remove internal annotations
-	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
-		return k == "kubectl.kubernetes.io/last-applied-configuration"
-	})
-
-	// Spec (simplified)
-	result.Spec["concurrencyPolicy"] = cj.Spec.ConcurrencyPolicy
-	result.Spec["startingDeadlineSeconds"] = cj.Spec.StartingDeadlineSeconds
-	result.Spec["successfulJobsHistoryLimit"] = cj.Spec.SuccessfulJobsHistoryLimit
-	result.Spec["failedJobsHistoryLimit"] = cj.Spec.FailedJobsHistoryLimit
+	if cj.Spec.FailedJobsHistoryLimit != nil {
+		result.CronJobSpec.FailedJobsHistoryLimit = fmt.Sprintf("%d", *cj.Spec.FailedJobsHistoryLimit)
+	}
 
 	return result
 }

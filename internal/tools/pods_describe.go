@@ -94,7 +94,7 @@ func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1
 	result.Spec["serviceAccountName"] = pod.Spec.ServiceAccountName
 
 	// Containers
-	result.Containers = extractContainerInfo(pod.Spec.Containers)
+	result.Containers = toContainerInfoList(pod.Spec.Containers)
 
 	return result
 }

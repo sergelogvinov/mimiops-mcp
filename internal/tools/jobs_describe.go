@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -78,25 +77,10 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 func buildJobDescribeResult(ctx context.Context, job *batchv1.Job, client *k8s.Client) (*JobDescribeResult, error) {
 	result := &JobDescribeResult{
 		JobSummary:  toJobSummary(job),
-		Labels:      job.Labels,
-		Annotations: job.Annotations,
+		Annotations: extractAnnotations(job.Annotations),
+		Labels:      extractLabels(job.Labels),
 		Spec:        make(map[string]any),
 	}
-
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
-	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
-	}
-
-	// Remove internal annotations
-	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
-		return k == "kubectl.kubernetes.io/last-applied-configuration"
-	})
-
-	// Containers
-	// result.Containers = extractContainerInfo(job.Spec.Template.Spec.Containers)
 
 	// Conditions
 	result.Conditions = make([]ConditionInfo, 0, len(job.Status.Conditions))

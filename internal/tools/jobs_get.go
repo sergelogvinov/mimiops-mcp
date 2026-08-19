@@ -2,8 +2,8 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -17,10 +17,10 @@ import (
 // JobGetResult represents the result of getting a single Job.
 type JobGetResult struct {
 	JobSummary
+	JobSpec
 
-	Labels      map[string]string `json:"labels" jsonschema:"labels of the Job"`
-	Annotations map[string]string `json:"annotations" jsonschema:"annotations of the Job"`
-	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the Job"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 }
 
 // RegisterJobsGet adds the jobs_get tool, which gets a single Job's full spec and status.
@@ -68,28 +68,29 @@ func RegisterJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 func buildJobGetResult(job *batchv1.Job) *JobGetResult {
 	result := &JobGetResult{
 		JobSummary:  toJobSummary(job),
-		Labels:      job.Labels,
-		Annotations: job.Annotations,
-		Spec:        make(map[string]any),
+		Annotations: extractAnnotations(job.Annotations),
+		Labels:      extractLabels(job.Labels),
+		JobSpec: JobSpec{
+			PodSpec: PodSpec{
+				RestartPolicy:     string(job.Spec.Template.Spec.RestartPolicy),
+				ServiceAccount:    job.Spec.Template.Spec.ServiceAccountName,
+				PriorityClassName: job.Spec.Template.Spec.PriorityClassName,
+				InitContainers:    toContainerInfoList(job.Spec.Template.Spec.InitContainers),
+				Containers:        toContainerInfoList(job.Spec.Template.Spec.Containers),
+				Volumes:           extractVolumeNames(job.Spec.Template.Spec.Volumes),
+			},
+		},
 	}
 
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
+	if job.Spec.Parallelism != nil {
+		result.JobSpec.Parallelism = fmt.Sprintf("%d", *job.Spec.Parallelism)
 	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
+	if job.Spec.BackoffLimit != nil {
+		result.JobSpec.BackoffLimit = fmt.Sprintf("%d", *job.Spec.BackoffLimit)
 	}
-
-	// Remove internal annotations
-	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
-		return k == "kubectl.kubernetes.io/last-applied-configuration"
-	})
-
-	// Spec (simplified)
-	result.Spec["completions"] = job.Spec.Completions
-	result.Spec["parallelism"] = job.Spec.Parallelism
-	result.Spec["backoffLimit"] = job.Spec.BackoffLimit
-	result.Spec["activeDeadlineSeconds"] = job.Spec.ActiveDeadlineSeconds
+	if job.Spec.ActiveDeadlineSeconds != nil {
+		result.JobSpec.ActiveDeadlineSeconds = fmt.Sprintf("%d", *job.Spec.ActiveDeadlineSeconds)
+	}
 
 	return result
 }

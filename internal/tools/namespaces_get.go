@@ -17,10 +17,10 @@ import (
 type NamespaceGetResult struct {
 	NamespaceSummary
 
-	Labels      map[string]string `json:"labels" jsonschema:"Labels of the namespace"`
-	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the namespace"`
-	Finalizers  []string          `json:"finalizers" jsonschema:"List of finalizers"`
-	Conditions  []ConditionInfo   `json:"conditions" jsonschema:"List of conditions"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
+	Finalizers  []string          `json:"finalizers" jsonschema:"Finalizers"`
+	Conditions  []ConditionInfo   `json:"conditions,omitempty" jsonschema:"Conditions"`
 }
 
 // RegisterNamespacesGet adds the namespaces_get tool, which gets a single namespace's full spec and status.
@@ -64,19 +64,19 @@ func buildNamespaceGetResult(ns *corev1.Namespace) *NamespaceGetResult {
 			Status: string(ns.Status.Phase),
 			Age:    formatAge(ns.CreationTimestamp),
 		},
-		Labels:      ns.Labels,
-		Annotations: ns.Annotations,
+		Annotations: extractAnnotations(ns.Annotations),
+		Labels:      extractLabels(ns.Labels),
 		Finalizers:  ns.Finalizers,
 		Conditions:  make([]ConditionInfo, 0, len(ns.Status.Conditions)),
 	}
 
 	// Conditions
-	for _, c := range ns.Status.Conditions {
+	for _, cond := range ns.Status.Conditions {
 		result.Conditions = append(result.Conditions, ConditionInfo{
-			Type:    string(c.Type),
-			Status:  string(c.Status),
-			Reason:  c.Reason,
-			Message: c.Message,
+			Type:    string(cond.Type),
+			Status:  string(cond.Status),
+			Reason:  cond.Reason,
+			Message: cond.Message,
 		})
 	}
 

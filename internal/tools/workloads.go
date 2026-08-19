@@ -84,6 +84,51 @@ func getWorkloadByKind(ctx context.Context, client *k8s.Client, namespace, name,
 	}
 }
 
+// listWorkloadsByKind lists workloads of a specific kind.
+func listWorkloadsByKind(ctx context.Context, client *k8s.Client, namespace, kind string, labelSelector string) (summaries []WorkloadSummary, err error) {
+	opts := metav1.ListOptions{
+		LabelSelector: labelSelector,
+	}
+
+	switch kind {
+	case "deployment":
+		deployments, err := client.AppsV1().Deployments(namespace).List(ctx, opts)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return nil, fmt.Errorf("no deployments found")
+			}
+			return nil, fmt.Errorf("failed to list deployments: %v", err)
+		}
+		for _, d := range deployments.Items {
+			summaries = append(summaries, toWorkloadSummaryDeployment(&d))
+		}
+	case "statefulset":
+		statefulsets, err := client.AppsV1().StatefulSets(namespace).List(ctx, opts)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return nil, fmt.Errorf("no statefulsets found")
+			}
+			return nil, fmt.Errorf("failed to list statefulsets: %v", err)
+		}
+		for _, s := range statefulsets.Items {
+			summaries = append(summaries, toWorkloadSummaryStatefulSet(&s))
+		}
+	case "daemonset":
+		daemonsets, err := client.AppsV1().DaemonSets(namespace).List(ctx, opts)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return nil, fmt.Errorf("no daemonsets found")
+			}
+			return nil, fmt.Errorf("failed to list daemonsets: %v", err)
+		}
+		for _, d := range daemonsets.Items {
+			summaries = append(summaries, toWorkloadSummaryDaemonSet(&d))
+		}
+	}
+
+	return summaries, nil
+}
+
 // listAllWorkloads lists all three kinds of workloads in a namespace.
 func listAllWorkloads(ctx context.Context, client *k8s.Client, namespace string, labelSelector string) ([]WorkloadSummary, error) {
 	opts := metav1.ListOptions{
@@ -98,7 +143,7 @@ func listAllWorkloads(ctx context.Context, client *k8s.Client, namespace string,
 		return nil, fmt.Errorf("failed to list deployments: %v", err)
 	}
 	for _, d := range deployments.Items {
-		summaries = append(summaries, toWorkloadSummaryDeployment(d))
+		summaries = append(summaries, toWorkloadSummaryDeployment(&d))
 	}
 
 	// List statefulsets
@@ -107,7 +152,7 @@ func listAllWorkloads(ctx context.Context, client *k8s.Client, namespace string,
 		return nil, fmt.Errorf("failed to list statefulsets: %v", err)
 	}
 	for _, s := range statefulsets.Items {
-		summaries = append(summaries, toWorkloadSummaryStatefulSet(s))
+		summaries = append(summaries, toWorkloadSummaryStatefulSet(&s))
 	}
 
 	// List daemonsets
@@ -116,14 +161,14 @@ func listAllWorkloads(ctx context.Context, client *k8s.Client, namespace string,
 		return nil, fmt.Errorf("failed to list daemonsets: %v", err)
 	}
 	for _, d := range daemonsets.Items {
-		summaries = append(summaries, toWorkloadSummaryDaemonSet(d))
+		summaries = append(summaries, toWorkloadSummaryDaemonSet(&d))
 	}
 
 	return summaries, nil
 }
 
 // toWorkloadSummary converts a Deployment to a WorkloadSummary.
-func toWorkloadSummaryDeployment(deployment appsv1.Deployment) WorkloadSummary {
+func toWorkloadSummaryDeployment(deployment *appsv1.Deployment) WorkloadSummary {
 	return WorkloadSummary{
 		Kind:      "deployment",
 		Namespace: deployment.Namespace,
@@ -135,7 +180,7 @@ func toWorkloadSummaryDeployment(deployment appsv1.Deployment) WorkloadSummary {
 }
 
 // toWorkloadSummary converts a StatefulSet to a WorkloadSummary.
-func toWorkloadSummaryStatefulSet(statefulset appsv1.StatefulSet) WorkloadSummary {
+func toWorkloadSummaryStatefulSet(statefulset *appsv1.StatefulSet) WorkloadSummary {
 	return WorkloadSummary{
 		Kind:      "statefulset",
 		Namespace: statefulset.Namespace,
@@ -147,7 +192,7 @@ func toWorkloadSummaryStatefulSet(statefulset appsv1.StatefulSet) WorkloadSummar
 }
 
 // toWorkloadSummary converts a DaemonSet to a WorkloadSummary.
-func toWorkloadSummaryDaemonSet(daemonset appsv1.DaemonSet) WorkloadSummary {
+func toWorkloadSummaryDaemonSet(daemonset *appsv1.DaemonSet) WorkloadSummary {
 	return WorkloadSummary{
 		Kind:      "daemonset",
 		Namespace: daemonset.Namespace,
@@ -162,32 +207,32 @@ func toWorkloadSummaryDaemonSet(daemonset appsv1.DaemonSet) WorkloadSummary {
 func toWorkloadSummary(workload any) WorkloadSummary {
 	switch w := workload.(type) {
 	case *appsv1.Deployment:
-		return toWorkloadSummaryDeployment(*w)
+		return toWorkloadSummaryDeployment(w)
 	case *appsv1.StatefulSet:
-		return toWorkloadSummaryStatefulSet(*w)
+		return toWorkloadSummaryStatefulSet(w)
 	case *appsv1.DaemonSet:
-		return toWorkloadSummaryDaemonSet(*w)
+		return toWorkloadSummaryDaemonSet(w)
 	default:
 		return WorkloadSummary{}
 	}
 }
 
 // formatDeploymentReady returns the ready/desired replicas string for a Deployment.
-func formatDeploymentReady(deployment appsv1.Deployment) string {
+func formatDeploymentReady(deployment *appsv1.Deployment) string {
 	ready := deployment.Status.ReadyReplicas
 	desired := *deployment.Spec.Replicas
 	return fmt.Sprintf("%d/%d", ready, desired)
 }
 
 // formatStatefulSetReady returns the ready/desired replicas string for a StatefulSet.
-func formatStatefulSetReady(statefulset appsv1.StatefulSet) string {
+func formatStatefulSetReady(statefulset *appsv1.StatefulSet) string {
 	ready := statefulset.Status.ReadyReplicas
 	desired := *statefulset.Spec.Replicas
 	return fmt.Sprintf("%d/%d", ready, desired)
 }
 
 // formatDaemonSetReady returns the ready/desired replicas string for a DaemonSet.
-func formatDaemonSetReady(daemonset appsv1.DaemonSet) string {
+func formatDaemonSetReady(daemonset *appsv1.DaemonSet) string {
 	ready := daemonset.Status.NumberReady
 	desired := daemonset.Status.DesiredNumberScheduled
 	return fmt.Sprintf("%d/%d", ready, desired)

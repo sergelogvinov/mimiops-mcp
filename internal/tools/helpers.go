@@ -1,8 +1,10 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -118,11 +120,11 @@ func formatMatchLabels(labels map[string]string) string {
 		return ""
 	}
 
-	var result strings.Builder
+	var result bytes.Buffer
 	first := true
 	for k, v := range labels {
 		if !first {
-			result.WriteString(", ")
+			result.WriteString(",")
 		}
 		fmt.Fprintf(&result, "%s=%s", k, v)
 		first = false
@@ -131,19 +133,117 @@ func formatMatchLabels(labels map[string]string) string {
 	return result.String()
 }
 
-// extractContainerInfo extracts container information from a pod spec.
-func extractContainerInfo(containers []corev1.Container) []ContainerInfo {
-	result := make([]ContainerInfo, 0, len(containers))
-	for _, c := range containers {
-		ports := make([]int32, 0, len(c.Ports))
-		for _, p := range c.Ports {
-			ports = append(ports, p.ContainerPort)
+func extractAnnotations(annotations map[string]string) map[string]string {
+	result := make(map[string]string)
+
+	ignoreKeys := []string{
+		defaultContainerAnnotation,
+		"kubectl.kubernetes.io/last-applied-configuration",
+		"deployment.kubernetes.io/revision",
+	}
+	ignoreKeysPrefix := []string{
+		"prometheus.io/",
+		"meta.helm.sh/",
+	}
+
+	for k, v := range annotations {
+		if slices.Contains(ignoreKeys, k) {
+			continue
 		}
-		result = append(result, ContainerInfo{
+
+		ignore := false
+		for _, prefix := range ignoreKeysPrefix {
+			if strings.HasPrefix(k, prefix) {
+				ignore = true
+				break
+			}
+		}
+		if ignore {
+			continue
+		}
+
+		result[k] = v
+	}
+
+	return result
+}
+
+func extractLabels(labels map[string]string) map[string]string {
+	result := make(map[string]string)
+
+	ignoreKeys := []string{
+		"pod-template-hash",
+		"controller-revision-hash",
+		"statefulset.kubernetes.io/pod-name",
+		"controller-uid",
+		"job-name",
+		"app.kubernetes.io/version",
+		"app.kubernetes.io/managed-by",
+	}
+	ignoreKeysPrefix := []string{
+		"batch.kubernetes.io/",
+		"helm.sh/",
+		"kustomize.toolkit.fluxcd.io/",
+		"helm.toolkit.fluxcd.io/",
+	}
+
+	for k, v := range labels {
+		if slices.Contains(ignoreKeys, k) {
+			continue
+		}
+
+		ignore := false
+		for _, prefix := range ignoreKeysPrefix {
+			if strings.HasPrefix(k, prefix) {
+				ignore = true
+				break
+			}
+		}
+		if ignore {
+			continue
+		}
+
+		result[k] = v
+	}
+
+	return result
+}
+
+func toPodSpec(pod *corev1.Pod) PodSpec {
+	return PodSpec{
+		RestartPolicy:     string(pod.Spec.RestartPolicy),
+		ServiceAccount:    pod.Spec.ServiceAccountName,
+		PriorityClassName: pod.Spec.PriorityClassName,
+		InitContainers:    toContainerInfoList(pod.Spec.InitContainers),
+		Containers:        toContainerInfoList(pod.Spec.Containers),
+		Volumes:           extractVolumeNames(pod.Spec.Volumes),
+	}
+}
+
+func toContainerInfoList(containers []corev1.Container) []ContainerInfo {
+	infoList := make([]ContainerInfo, 0, len(containers))
+	for _, c := range containers {
+		infoList = append(infoList, ContainerInfo{
 			Name:  c.Name,
 			Image: c.Image,
-			Ports: ports,
+			Ports: extractContainerPorts(c.Ports),
 		})
 	}
-	return result
+	return infoList
+}
+
+func extractContainerPorts(ports []corev1.ContainerPort) []string {
+	portList := make([]string, 0, len(ports))
+	for _, p := range ports {
+		portList = append(portList, fmt.Sprintf("%d/%s", p.ContainerPort, p.Protocol))
+	}
+	return portList
+}
+
+func extractVolumeNames(volumes []corev1.Volume) []string {
+	volumeNames := make([]string, 0, len(volumes))
+	for _, v := range volumes {
+		volumeNames = append(volumeNames, v.Name)
+	}
+	return volumeNames
 }

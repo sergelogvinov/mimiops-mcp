@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"log/slog"
-	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -18,10 +17,9 @@ import (
 type ResourceQuotaGetResult struct {
 	ResourceQuotaSummary
 
-	Labels      map[string]string `json:"labels" jsonschema:"Labels of the resource quota"`
-	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the resource quota"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the resource quota"`
-	Status      map[string]any    `json:"status" jsonschema:"Status of the resource quota"`
 }
 
 // RegisterResourceQuotasGet adds the resourcequotas_get tool, which gets a single ResourceQuota's full spec and status.
@@ -78,29 +76,13 @@ func buildResourceQuotaGetResult(quota *corev1.ResourceQuota) *ResourceQuotaGetR
 			LimitsCPU:      getQuotaValueDisplay(usedStatus, used, corev1.ResourceLimitsCPU),
 			LimitsMemory:   getQuotaValueDisplay(usedStatus, used, corev1.ResourceLimitsMemory),
 		},
-		Labels:      quota.Labels,
-		Annotations: quota.Annotations,
+		Annotations: extractAnnotations(quota.Annotations),
+		Labels:      extractLabels(quota.Labels),
+		Spec:        make(map[string]any),
 	}
 
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
-	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
-	}
-
-	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
-		return k == "kubectl.kubernetes.io/last-applied-configuration"
-	})
-
-	// Spec
-	result.Spec = make(map[string]any)
+	// Spec (simplified)
 	result.Spec["hard"] = quota.Spec.Hard
-
-	// Status
-	result.Status = make(map[string]any)
-	result.Status["hard"] = quota.Status.Hard
-	result.Status["used"] = quota.Status.Used
 
 	return &result
 }

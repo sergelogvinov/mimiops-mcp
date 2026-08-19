@@ -2,14 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
-	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -53,7 +51,7 @@ func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Log
 
 		// Build result
 		for _, cj := range cronJobs.Items {
-			result.CronJobs = append(result.CronJobs, toCronJobSummary(cj))
+			result.CronJobs = append(result.CronJobs, toCronJobSummary(&cj))
 		}
 
 		// Build fallback text
@@ -64,39 +62,4 @@ func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Log
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
 	})
-}
-
-// toCronJobSummary converts a CronJob to a CronJobSummary.
-func toCronJobSummary(cj batchv1.CronJob) CronJobSummary {
-	suspend := false
-	if cj.Spec.Suspend != nil {
-		suspend = *cj.Spec.Suspend
-	}
-
-	lastSchedule := ""
-	if cj.Status.LastScheduleTime != nil {
-		lastSchedule = formatAgeMin(*cj.Status.LastScheduleTime)
-	}
-
-	return CronJobSummary{
-		Namespace:    cj.Namespace,
-		Name:         cj.Name,
-		Schedule:     cj.Spec.Schedule,
-		Suspend:      suspend,
-		Status:       deriveCronJobStatus(cj),
-		LastSchedule: lastSchedule,
-		Age:          formatAge(cj.CreationTimestamp),
-	}
-}
-
-// deriveCronJobStatus derives the status string for a CronJob.
-func deriveCronJobStatus(cj batchv1.CronJob) string {
-	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
-		// Check for active jobs
-		if len(cj.Status.Active) == 0 {
-			return "Suspended"
-		}
-		return fmt.Sprintf("Suspended (%d/%d)", len(cj.Status.Active), len(cj.Status.Active))
-	}
-	return "Active"
 }

@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"log/slog"
-	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -17,13 +16,12 @@ import (
 // PodGetResult represents the result of getting a pod.
 type PodGetResult struct {
 	PodSummary
+	PodSpec
 
-	Labels      map[string]string `json:"labels" jsonschema:"Labels of the Pod"`
-	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the Pod"`
-	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the Pod"`
-
-	Tolerations []TaintInfo     `json:"tolerations,omitempty" jsonschema:"List of tolerations"`
-	Conditions  []ConditionInfo `json:"conditions,omitempty" jsonschema:"List of conditions"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
+	Tolerations []TolerationInfo  `json:"tolerations,omitempty" jsonschema:"Tolerations"`
+	Conditions  []ConditionInfo   `json:"conditions,omitempty" jsonschema:"Conditions"`
 }
 
 // RegisterPodsGet adds the pods_get tool, which gets a pod's full spec and status.
@@ -71,31 +69,19 @@ func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 func buildPodGetResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodGetResult {
 	result := &PodGetResult{
 		PodSummary:  toPodSummary(ctx, client, pod),
-		Labels:      pod.Labels,
-		Annotations: pod.Annotations,
-		Spec:        make(map[string]any),
-		Tolerations: make([]TaintInfo, 0, len(pod.Spec.Tolerations)),
+		PodSpec:     toPodSpec(pod),
+		Annotations: extractAnnotations(pod.Annotations),
+		Labels:      extractLabels(pod.Labels),
+		Tolerations: make([]TolerationInfo, 0, len(pod.Spec.Tolerations)),
 		Conditions:  make([]ConditionInfo, 0, len(pod.Status.Conditions)),
 	}
 
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
-	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
-	}
-
-	// Remove internal annotations
-	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
-		return k == "kubectl.kubernetes.io/last-applied-configuration"
-	})
-
 	// Tolerations
-	for _, taint := range pod.Spec.Tolerations {
-		result.Tolerations = append(result.Tolerations, TaintInfo{
-			Key:    taint.Key,
-			Value:  taint.Value,
-			Effect: string(taint.Effect),
+	for _, toleration := range pod.Spec.Tolerations {
+		result.Tolerations = append(result.Tolerations, TolerationInfo{
+			Key:    toleration.Key,
+			Value:  toleration.Value,
+			Effect: string(toleration.Effect),
 		})
 	}
 
@@ -108,12 +94,6 @@ func buildPodGetResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod)
 			Message: cond.Message,
 		})
 	}
-
-	// Spec (simplified)
-	result.Spec = make(map[string]any)
-	result.Spec["nodeName"] = pod.Spec.NodeName
-	result.Spec["restartPolicy"] = pod.Spec.RestartPolicy
-	result.Spec["serviceAccountName"] = pod.Spec.ServiceAccountName
 
 	return result
 }

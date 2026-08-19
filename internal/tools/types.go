@@ -88,38 +88,17 @@ type WorkloadSummary struct {
 	Kind      string `json:"kind" jsonschema:"Kind of the workload (Deployment, StatefulSet, or DaemonSet)"`
 	Namespace string `json:"namespace" jsonschema:"Namespace of the workload"`
 	Name      string `json:"name" jsonschema:"Name of the workload"`
-	Ready     string `json:"ready,omitempty" jsonschema:"Number of ready replicas of the workload"`
+	Ready     string `json:"ready,omitempty" jsonschema:"Ready status (e.g., 1/2)"`
 	Desired   int    `json:"desired" jsonschema:"Number of desired replicas of the workload"`
 	Age       string `json:"age,omitempty" jsonschema:"Age of the workload"`
 }
 
-// WorkloadDetails is the detailed representation of a workload used by
-// workloads_get and workloads_describe in JSON format.
-type WorkloadDetails struct {
-	Kind      string         `json:"kind"`
-	Namespace string         `json:"namespace"`
-	Name      string         `json:"name"`
-	Replicas  Replicas       `json:"replicas"`
-	Selector  string         `json:"selector"`
-	Service   string         `json:"service,omitempty"`
-	Strategy  string         `json:"update_strategy,omitempty"`
-	Age       string         `json:"age"`
-	Spec      map[string]any `json:"spec"`
-	Status    map[string]any `json:"status"`
-}
+// WorkloadSpec is the trimmed representation of a workload spec used by workloads_get and workloads_describe.
+type WorkloadSpec struct {
+	PodSpec
 
-// WorkloadDescribe is the structured output for workloads_describe in JSON format.
-type WorkloadDescribe struct {
-	Kind           string          `json:"kind"`
-	Namespace      string          `json:"namespace"`
-	Name           string          `json:"name"`
-	Replicas       Replicas        `json:"replicas"`
-	Selector       string          `json:"selector"`
-	Service        string          `json:"service,omitempty"`
-	UpdateStrategy string          `json:"update_strategy"`
-	Conditions     []ConditionInfo `json:"conditions,omitempty"`
-	PodTemplate    PodTemplate     `json:"pod_template"`
-	Age            string          `json:"age"`
+	Selector       string `json:"selector,omitempty" jsonschema:"Selector of the workload"`
+	UpdateStrategy string `json:"update_strategy,omitempty" jsonschema:"Update strategy of the workload"`
 }
 
 // CronJobSummary is the trimmed, agent-friendly representation of a CronJob
@@ -129,9 +108,20 @@ type CronJobSummary struct {
 	Name         string `json:"name" jsonschema:"name"`
 	Schedule     string `json:"schedule" jsonschema:"schedule"`
 	Suspend      bool   `json:"suspend" jsonschema:"suspend"`
-	Status       string `json:"status" jsonschema:"status"`
 	LastSchedule string `json:"lastSchedule,omitempty" jsonschema:"lastSchedule"`
 	Age          string `json:"age" jsonschema:"age"`
+	Status       string `json:"status" jsonschema:"status"`
+}
+
+// CronJobSpec is the trimmed representation of a CronJob spec used by cronjobs_get.
+type CronJobSpec struct {
+	PodSpec
+
+	Selector                   string `json:"selector,omitempty" jsonschema:"Selector of the jobs and pods created by the CronJob"`
+	StartingDeadlineSeconds    string `json:"startingDeadlineSeconds,omitempty" jsonschema:"startingDeadlineSeconds"`
+	SuccessfulJobsHistoryLimit string `json:"successfulJobsHistoryLimit,omitempty" jsonschema:"successfulJobsHistoryLimit"`
+	FailedJobsHistoryLimit     string `json:"failedJobsHistoryLimit,omitempty" jsonschema:"failedJobsHistoryLimit"`
+	ConcurrencyPolicy          string `json:"concurrencyPolicy,omitempty" jsonschema:"concurrencyPolicy"`
 }
 
 // JobSummary is the trimmed, agent-friendly representation of a Job used by
@@ -143,6 +133,15 @@ type JobSummary struct {
 	Duration    string `json:"duration,omitempty" jsonschema:"duration"`
 	Age         string `json:"age" jsonschema:"age"`
 	Status      string `json:"status" jsonschema:"status"`
+}
+
+// JobSpec is the trimmed representation of a Job spec used by jobs_get.
+type JobSpec struct {
+	PodSpec
+
+	Parallelism           string `json:"parallelism,omitempty" jsonschema:"parallelism"`
+	BackoffLimit          string `json:"backoffLimit,omitempty" jsonschema:"backoffLimit"`
+	ActiveDeadlineSeconds string `json:"activeDeadlineSeconds,omitempty" jsonschema:"activeDeadlineSeconds"`
 }
 
 // PodSummary is the trimmed, agent-friendly representation of a pod used by
@@ -158,12 +157,14 @@ type PodSummary struct {
 	OwnerReferences []OwnerReference `json:"ownerReferences,omitempty" jsonschema:"Owner References"`
 }
 
-// PodTemplate represents the pod template specification.
-type PodTemplate struct {
-	Labels         map[string]string `json:"labels" jsonschema:"Labels"`
-	Containers     []ContainerInfo   `json:"containers" jsonschema:"List of containers"`
-	RestartPolicy  string            `json:"restart_policy" jsonschema:"restart policy"`
-	ServiceAccount string            `json:"service_account,omitempty" jsonschema:"ServiceAccount"`
+// PodSpec is the trimmed representation of a pod spec used by pods_get and jobs_get and workloads_get.
+type PodSpec struct {
+	RestartPolicy     string          `json:"restart_policy,omitempty" jsonschema:"restart policy"`
+	ServiceAccount    string          `json:"service_account,omitempty" jsonschema:"ServiceAccount"`
+	PriorityClassName string          `json:"priority_class_name,omitempty" jsonschema:"PriorityClassName"`
+	InitContainers    []ContainerInfo `json:"init_containers,omitempty" jsonschema:"List of init containers"`
+	Containers        []ContainerInfo `json:"containers" jsonschema:"List of containers"`
+	Volumes           []string        `json:"volumes,omitempty" jsonschema:"List of volumes names"`
 }
 
 // PodInfo represents information about a pod.
@@ -176,15 +177,9 @@ type PodInfo struct {
 
 // ContainerInfo represents information about a container.
 type ContainerInfo struct {
-	Name  string  `json:"name" jsonschema:"Name"`
-	Image string  `json:"image" jsonschema:"Image"`
-	Ports []int32 `json:"ports,omitempty" jsonschema:"List of ports"`
-}
-
-// Replicas represents ready and desired replica counts.
-type Replicas struct {
-	Ready   int `json:"ready" jsonschema:"Ready replicas"`
-	Desired int `json:"desired" jsonschema:"Desired replicas"`
+	Name  string   `json:"name" jsonschema:"Name"`
+	Image string   `json:"image" jsonschema:"Image"`
+	Ports []string `json:"ports,omitempty" jsonschema:"List of ports"`
 }
 
 // ConditionInfo represents information about a Job condition.
@@ -193,6 +188,21 @@ type ConditionInfo struct {
 	Status  string `json:"status" jsonschema:"Status"`
 	Reason  string `json:"reason,omitempty" jsonschema:"Reason"`
 	Message string `json:"message,omitempty" jsonschema:"Message description"`
+}
+
+// TaintInfo represents a node taint.
+type TaintInfo struct {
+	Key    string `json:"key" jsonschema:"Key"`
+	Value  string `json:"value,omitempty" jsonschema:"Value"`
+	Effect string `json:"effect" jsonschema:"Effect"`
+}
+
+// TolerationInfo represents a pod toleration.
+type TolerationInfo struct {
+	Key      string `json:"key" jsonschema:"Key"`
+	Operator string `json:"operator" jsonschema:"Operator"`
+	Value    string `json:"value,omitempty" jsonschema:"Value"`
+	Effect   string `json:"effect" jsonschema:"Effect"`
 }
 
 // LogStream is one pod/container log stream.

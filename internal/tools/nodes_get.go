@@ -29,13 +29,6 @@ type NodeGetResult struct {
 	// Pods     []PodSummary `json:"pods,omitempty" jsonschema:"List of pods running on the node"`
 }
 
-// TaintInfo represents a node taint.
-type TaintInfo struct {
-	Key    string `json:"key" jsonschema:"Key"`
-	Value  string `json:"value" jsonschema:"Value"`
-	Effect string `json:"effect" jsonschema:"Effect"`
-}
-
 // NodeInfo represents node information.
 type NodeInfo struct {
 	KubeletVersion          string `json:"kubelet_version" jsonschema:"Kubelet version"`

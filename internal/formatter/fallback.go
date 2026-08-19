@@ -40,31 +40,9 @@ func ToMarkdown(v any) string {
 
 	// Collect all printable fields (those with jsonschema tag)
 	var fields []fieldInfo
-	for i := range val.NumField() {
-		field := typ.Field(i)
-		tag := field.Tag.Get("jsonschema")
-		if tag == "" {
-			continue
-		}
 
-		fieldVal := val.Field(i)
-		// Skip nil pointers
-		if fieldVal.Kind() == reflect.Pointer && fieldVal.IsNil() {
-			continue
-		}
-
-		// Check for omitempty
-		omitempty := strings.Contains(field.Tag.Get("json"), "omitempty")
-		if omitempty && isZero(fieldVal) {
-			continue
-		}
-
-		fields = append(fields, fieldInfo{
-			tag:       tag,
-			value:     fieldVal,
-			omitempty: omitempty,
-		})
-	}
+	seen := make(map[string]bool) // Track field names to avoid duplicates
+	collectFields(val, typ, &fields, &seen)
 
 	// Render each field as a bullet point
 	for _, f := range fields {
@@ -176,11 +154,23 @@ func formatStructSlice(v reflect.Value, depth int) string {
 
 	// Collect printable fields for the table header
 	var headerFields []fieldInfo
+	seen := make(map[string]bool)
 	for field := range elemType.Fields() {
+		// Skip anonymous fields in table headers
+		if field.Anonymous {
+			continue
+		}
+
 		tag := field.Tag.Get("jsonschema")
 		if tag == "" {
 			continue
 		}
+
+		// Check for duplicates
+		if _, exists := seen[tag]; exists {
+			continue
+		}
+		seen[tag] = true
 
 		// Get default value for the field type
 		defaultVal := reflect.Zero(field.Type)
@@ -240,10 +230,29 @@ func formatStructSlice(v reflect.Value, depth int) string {
 }
 
 // findFieldByName finds a struct field by its jsonschema tag value.
+// It recursively searches through anonymous (embedded) fields.
 func findFieldByName(v reflect.Value, tagName string) reflect.Value {
 	t := v.Type()
 	for i := range t.NumField() {
 		field := t.Field(i)
+
+		// Recursively search in anonymous fields
+		if field.Anonymous {
+			fieldVal := v.Field(i)
+			if fieldVal.Kind() == reflect.Pointer {
+				if fieldVal.IsNil() {
+					continue
+				}
+				fieldVal = fieldVal.Elem()
+			}
+			if fieldVal.Kind() == reflect.Struct {
+				if result := findFieldByName(fieldVal, tagName); result.IsValid() {
+					return result
+				}
+			}
+			continue
+		}
+
 		tag := field.Tag.Get("jsonschema")
 		if tag == tagName {
 			return v.Field(i)
@@ -259,35 +268,10 @@ func formatStruct(v reflect.Value, depth int) string {
 	}
 
 	var buf bytes.Buffer
-	typ := v.Type()
-
-	// Collect printable fields
 	var fields []fieldInfo
-	for i := range v.NumField() {
-		field := typ.Field(i)
-		tag := field.Tag.Get("jsonschema")
-		if tag == "" {
-			continue
-		}
 
-		fieldVal := v.Field(i)
-		// Skip nil pointers
-		if fieldVal.Kind() == reflect.Pointer && fieldVal.IsNil() {
-			continue
-		}
-
-		// Check for omitempty
-		omitempty := field.Tag.Get("json") == ",omitempty"
-		if omitempty && isZero(fieldVal) {
-			continue
-		}
-
-		fields = append(fields, fieldInfo{
-			tag:       tag,
-			value:     fieldVal,
-			omitempty: omitempty,
-		})
-	}
+	seen := make(map[string]bool)
+	collectFields(v, v.Type(), &fields, &seen)
 
 	if len(fields) == 0 {
 		return ""
@@ -368,5 +352,57 @@ func isZero(v reflect.Value) bool {
 func writeIndent(buf *bytes.Buffer, depth int) {
 	for range depth {
 		buf.WriteString("    ")
+	}
+}
+
+// collectFields recursively collects all printable fields from a struct,
+// including fields from anonymous (embedded) fields.
+func collectFields(val reflect.Value, typ reflect.Type, fields *[]fieldInfo, seen *map[string]bool) {
+	for i := range typ.NumField() {
+		field := typ.Field(i)
+
+		// Handle anonymous (embedded) fields
+		if field.Anonymous {
+			fieldVal := val.Field(i)
+			if fieldVal.Kind() == reflect.Pointer {
+				if fieldVal.IsNil() {
+					continue
+				}
+				fieldVal = fieldVal.Elem()
+			}
+
+			if fieldVal.Kind() == reflect.Struct {
+				// Recursively collect fields from anonymous field
+				collectFields(fieldVal, fieldVal.Type(), fields, seen)
+			}
+			continue
+		}
+
+		tag := field.Tag.Get("jsonschema")
+		if tag == "" {
+			continue
+		}
+
+		// Check for duplicate field names (anonymous fields can cause duplicates)
+		if _, exists := (*seen)[tag]; exists {
+			continue
+		}
+		(*seen)[tag] = true
+
+		fieldVal := val.Field(i)
+		if fieldVal.Kind() == reflect.Pointer && fieldVal.IsNil() {
+			continue
+		}
+
+		omitempty := strings.Contains(field.Tag.Get("json"), "omitempty")
+		if omitempty && isZero(fieldVal) {
+			continue
+		}
+
+		*fields = append(*fields, fieldInfo{
+			tag:       tag,
+			value:     fieldVal,
+			omitempty: omitempty,
+		})
 	}
 }

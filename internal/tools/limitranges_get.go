@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"log/slog"
-	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -18,8 +17,8 @@ import (
 type LimitRangeGetResult struct {
 	LimitRangeSummary
 
-	Labels      map[string]string `json:"labels,omitempty" jsonschema:"Labels of the LimitRange"`
-	Annotations map[string]string `json:"annotations,omitempty" jsonschema:"Annotations of the LimitRange"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the LimitRange"`
 }
 
@@ -71,23 +70,12 @@ func buildLimitRangeGetResult(lr *corev1.LimitRange) *LimitRangeGetResult {
 			Types:     deriveLimitRangeTypes(lr),
 			Age:       formatAge(lr.CreationTimestamp),
 		},
-		Labels:      lr.Labels,
-		Annotations: lr.Annotations,
+		Annotations: extractAnnotations(lr.Annotations),
+		Labels:      extractLabels(lr.Labels),
+		Spec:        make(map[string]any),
 	}
-
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
-	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
-	}
-
-	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
-		return k == "kubectl.kubernetes.io/last-applied-configuration"
-	})
 
 	// Spec (simplified)
-	result.Spec = make(map[string]any)
 	result.Spec["limits"] = lr.Spec.Limits
 
 	return result
