@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 )
 
@@ -32,10 +32,7 @@ func RegisterClusterName(s *server.MCPServer, client *k8s.Client, log *slog.Logg
 	s.AddTool(tool, func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		log.InfoContext(ctx, "cluster_name called", "cluster", client.ClusterName)
 
-		result := ClusterNameResult{
-			Name: client.ClusterName,
-		}
-
-		return mcp.NewToolResultStructured(result, fmt.Sprintf("Cluster: %s", client.ClusterName)), nil
+		result := ClusterNameResult{Name: client.ClusterName}
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }

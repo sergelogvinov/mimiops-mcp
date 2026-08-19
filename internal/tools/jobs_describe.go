@@ -8,6 +8,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -69,11 +70,7 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			return mcp.NewToolResultErrorf("failed to build result: %v", err), nil
 		}
 
-		// Build fallback text with summary
-		fallbackText := fmt.Sprintf("Job '%s' in namespace '%s' has status '%s' with completions %s. Age: %s.",
-			result.Name, result.Namespace, result.Status, result.Completions, result.Age)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 

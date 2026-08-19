@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,8 +68,7 @@ func RegisterJobsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 			Namespace: namespace,
 			Deleted:   true,
 		}
-		fallbackText := fmt.Sprintf("Job '%s' in namespace '%s' deleted successfully.", name, namespace)
 
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }

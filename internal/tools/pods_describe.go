@@ -2,12 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -63,10 +63,7 @@ func RegisterPodsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		}
 
 		result := buildPodDescribeResult(ctx, client, pod)
-		fallbackText := fmt.Sprintf("Pod '%s' in namespace '%s' has status '%s' with ready status '%s'. Age: %s.",
-			result.Name, result.Namespace, result.Status, result.Ready, result.Age)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 

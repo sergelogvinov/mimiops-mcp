@@ -2,12 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 )
@@ -69,10 +69,7 @@ func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		}
 
 		result := buildWorkloadGetResult(workload)
-		fallbackText := fmt.Sprintf("%s '%s' in namespace '%s' has %s replicas ready/desired. Age: %s.",
-			result.Kind, result.Name, result.Namespace, result.Ready, result.Age)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 

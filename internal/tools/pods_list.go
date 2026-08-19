@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,14 +74,9 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		}
 
 		// Build fallback text
-		var fallbackText string
-		switch len(result.Pods) {
-		case 0:
-			fallbackText = "No pods found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 pod: %s in namespace %s (%s)", result.Pods[0].Name, result.Pods[0].Namespace, result.Pods[0].Status)
-		default:
-			fallbackText = fmt.Sprintf("Found %d pods", len(result.Pods))
+		fallbackText := "No pods found"
+		if len(result.Pods) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

@@ -140,7 +140,8 @@ mimiops/
 │   │   ├── helm_list.go         # helm_list
 │   │   ├── helm_status.go       # helm_status
 │   │   └── helm_rollback.go     # helm_rollback (destructive)
-│   └── logger
+│   └── formatter/
+│       └── formatter.go         # transforms typed result structs → human-readable markdown (fallbackText)
 │
 ├── tests/
 │   ├── mcp_test.go

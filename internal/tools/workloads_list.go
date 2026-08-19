@@ -7,6 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,14 +68,9 @@ func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 		}
 
 		// Build fallback text
-		var fallbackText string
-		switch len(result.Workloads) {
-		case 0:
-			fallbackText = "No workloads found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 workload: %s (%s) in namespace %s", result.Workloads[0].Name, result.Workloads[0].Kind, result.Workloads[0].Namespace)
-		default:
-			fallbackText = fmt.Sprintf("Found %d workloads", len(result.Workloads))
+		fallbackText := "No workloads found"
+		if len(result.Workloads) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

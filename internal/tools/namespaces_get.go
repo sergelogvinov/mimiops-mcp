@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,13 +51,8 @@ func RegisterNamespacesGet(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 			return mcp.NewToolResultErrorf("failed to get namespace '%s': %v", name, err), nil
 		}
 
-		// Build result
 		result := buildNamespaceGetResult(ns)
-
-		// Build fallback text
-		fallbackText := fmt.Sprintf("Namespace '%s' has status '%s'. Age: %s.", result.Name, result.Status, result.Age)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 

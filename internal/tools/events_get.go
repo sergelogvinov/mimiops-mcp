@@ -8,6 +8,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -99,14 +100,9 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		}
 
 		// Build fallback text
-		var fallbackText string
-		switch len(result.Events) {
-		case 0:
-			fallbackText = "No events found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 event: %s (%s)", result.Events[0].Reason, result.Events[0].Object)
-		default:
-			fallbackText = fmt.Sprintf("Found %d events", len(result.Events))
+		fallbackText := "No events found"
+		if len(result.Events) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

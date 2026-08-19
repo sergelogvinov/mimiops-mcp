@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 )
@@ -87,8 +87,6 @@ func RegisterHelmRollback(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			},
 		}
 
-		fallbackText := fmt.Sprintf("Rolled back release '%s' in namespace '%s' to revision %d", name, namespace, newRevision)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }

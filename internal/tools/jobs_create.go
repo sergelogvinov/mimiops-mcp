@@ -9,6 +9,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -76,9 +77,8 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		result := JobsCreateResult{
 			JobSummary: toJobSummary(job),
 		}
-		fallbackText := fmt.Sprintf("Created Job '%s' in namespace '%s'", finalJobName, namespace)
 
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 

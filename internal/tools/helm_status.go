@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 )
@@ -68,8 +68,7 @@ func RegisterHelmStatus(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		result := HelmStatusResult{
 			Release: *release,
 		}
-		fallbackText := fmt.Sprintf("Helm release '%s' in namespace '%s': %s (revision %d)", name, namespace, release.Status, release.Revision)
 
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }

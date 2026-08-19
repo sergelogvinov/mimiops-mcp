@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 )
@@ -64,15 +64,9 @@ func RegisterHelmList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		}
 
 		// Build fallback text
-		var fallbackText string
-		switch len(result.Releases) {
-		case 0:
-			fallbackText = fmt.Sprintf("No Helm releases found in namespace '%s'.", namespace)
-		case 1:
-			r := result.Releases[0]
-			fallbackText = fmt.Sprintf("Found 1 release: %s in namespace %s (revision %d, status: %s)", r.Name, r.Namespace, r.Revision, r.Status)
-		default:
-			fallbackText = fmt.Sprintf("Found %d Helm releases in namespace '%s'.", len(result.Releases), namespace)
+		fallbackText := "No Helm releases found"
+		if len(result.Releases) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

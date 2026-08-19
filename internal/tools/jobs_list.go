@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,14 +59,10 @@ func RegisterJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 			result.Jobs = append(result.Jobs, toJobSummary(&job))
 		}
 
-		var fallbackText string
-		switch len(result.Jobs) {
-		case 0:
-			fallbackText = "No Jobs found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 Job: %s in namespace %s (%s)", result.Jobs[0].Name, result.Jobs[0].Namespace, result.Jobs[0].Status)
-		default:
-			fallbackText = fmt.Sprintf("Found %d Jobs", len(result.Jobs))
+		// Build fallback text
+		fallbackText := "No Jobs found"
+		if len(result.Jobs) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

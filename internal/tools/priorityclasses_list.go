@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,14 +54,10 @@ func RegisterPriorityClassesList(s *server.MCPServer, client *k8s.Client, log *s
 			})
 		}
 
-		var fallbackText string
-		switch len(result.PriorityClasses) {
-		case 0:
-			fallbackText = "No priority classes found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 priority class: %s (value: %d)", result.PriorityClasses[0].Name, result.PriorityClasses[0].Value)
-		default:
-			fallbackText = fmt.Sprintf("Found %d priority classes", len(result.PriorityClasses))
+		// Build fallback text
+		fallbackText := "No priority classes found"
+		if len(result.PriorityClasses) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

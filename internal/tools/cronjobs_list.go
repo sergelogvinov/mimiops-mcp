@@ -7,6 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -55,14 +56,10 @@ func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			result.CronJobs = append(result.CronJobs, toCronJobSummary(cj))
 		}
 
-		var fallbackText string
-		switch len(result.CronJobs) {
-		case 0:
-			fallbackText = "No CronJobs found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 CronJob: %s in namespace %s (%s)", result.CronJobs[0].Name, result.CronJobs[0].Namespace, result.CronJobs[0].Status)
-		default:
-			fallbackText = fmt.Sprintf("Found %d CronJobs", len(result.CronJobs))
+		// Build fallback text
+		fallbackText := "No CronJobs found"
+		if len(result.CronJobs) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

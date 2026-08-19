@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,14 +49,9 @@ func RegisterNodesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		}
 
 		// Build fallback text
-		var fallbackText string
-		switch len(result.Nodes) {
-		case 0:
-			fallbackText = "No nodes found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 node: %s (%s)", result.Nodes[0].Name, result.Nodes[0].Status)
-		default:
-			fallbackText = fmt.Sprintf("Found %d nodes", len(result.Nodes))
+		fallbackText := "No nodes found"
+		if len(result.Nodes) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

@@ -7,6 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -118,11 +119,7 @@ func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client, log *slog.L
 			return mcp.NewToolResultErrorf("failed to get updated %s '%s' in namespace '%s': %v", kind, name, namespace, err), nil
 		}
 
-		result := ScaleResult{
-			WorkloadSummary: toWorkloadSummary(updatedWorkload),
-		}
-		fallbackText := fmt.Sprintf("Scaled %s '%s' in namespace '%s' to %d replicas.", kind, name, namespace, replicas)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		result := ScaleResult{WorkloadSummary: toWorkloadSummary(updatedWorkload)}
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }

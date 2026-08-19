@@ -7,6 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -77,8 +78,7 @@ func RegisterCronJobsResume(s *server.MCPServer, client *k8s.Client, log *slog.L
 		result := CronJobSuspendResumeResult{
 			CronJobSummary: toCronJobSummary(*updatedCronJob),
 		}
-		fallbackText := fmt.Sprintf("Resumed CronJob '%s' in namespace '%s'", name, namespace)
 
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }

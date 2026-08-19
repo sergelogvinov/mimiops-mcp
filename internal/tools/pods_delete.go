@@ -63,13 +63,6 @@ func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 			return mcp.NewToolResultErrorf("failed to delete pod '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		result := PodDeleteResult{
-			Name:      name,
-			Namespace: namespace,
-			Deleted:   true,
-		}
-		fallbackText := fmt.Sprintf("Pod '%s' in namespace '%s' deleted successfully.", name, namespace)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Pod '%s' in namespace '%s' deleted successfully.", name, namespace)), nil
 	})
 }

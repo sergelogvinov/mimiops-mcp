@@ -2,12 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -61,14 +61,10 @@ func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client, log *slog.
 			})
 		}
 
-		var fallbackText string
-		switch len(result.LimitRanges) {
-		case 0:
-			fallbackText = "No limit ranges found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 limit range: %s in namespace %s (%s)", result.LimitRanges[0].Name, result.LimitRanges[0].Namespace, result.LimitRanges[0].Types)
-		default:
-			fallbackText = fmt.Sprintf("Found %d limit ranges", len(result.LimitRanges))
+		// Build fallback text
+		fallbackText := "No LimitRanges found"
+		if len(result.LimitRanges) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

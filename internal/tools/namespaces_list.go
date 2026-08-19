@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,14 +52,10 @@ func RegisterNamespacesList(s *server.MCPServer, client *k8s.Client, log *slog.L
 			})
 		}
 
-		var fallbackText string
-		switch len(result.Namespaces) {
-		case 0:
-			fallbackText = "No namespaces found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 namespace: %s (%s)", result.Namespaces[0].Name, result.Namespaces[0].Status)
-		default:
-			fallbackText = fmt.Sprintf("Found %d namespaces", len(result.Namespaces))
+		// Build fallback text
+		fallbackText := "No Namespaces found"
+		if len(result.Namespaces) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

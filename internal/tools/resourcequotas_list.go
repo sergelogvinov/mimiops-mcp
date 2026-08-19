@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -70,14 +70,9 @@ func RegisterResourceQuotasList(s *server.MCPServer, client *k8s.Client, log *sl
 		}
 
 		// Build fallback text
-		var fallbackText string
-		switch len(result.ResourceQuotas) {
-		case 0:
-			fallbackText = "No resource quotas found."
-		case 1:
-			fallbackText = fmt.Sprintf("Found 1 resource quota: %s in namespace %s", result.ResourceQuotas[0].Name, result.ResourceQuotas[0].Namespace)
-		default:
-			fallbackText = fmt.Sprintf("Found %d resource quotas", len(result.ResourceQuotas))
+		fallbackText := "No resource quotas found"
+		if len(result.ResourceQuotas) > 0 {
+			fallbackText = formatter.ToMarkdown(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

@@ -2,12 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -65,11 +65,7 @@ func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog
 			return mcp.NewToolResultErrorf("failed to build result: %v", err), nil
 		}
 
-		// Build fallback text with summary
-		fallbackText := fmt.Sprintf("CronJob '%s' in namespace '%s' has schedule '%s' with status '%s'. Age: %s.",
-			result.Name, result.Namespace, result.Schedule, result.Status, result.Age)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 

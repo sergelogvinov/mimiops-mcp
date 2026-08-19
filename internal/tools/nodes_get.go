@@ -7,6 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,9 +31,9 @@ type NodeGetResult struct {
 
 // TaintInfo represents a node taint.
 type TaintInfo struct {
-	Key    string `json:"key" jsonschema:"Key of the taint"`
-	Value  string `json:"value" jsonschema:"Value of the taint"`
-	Effect string `json:"effect" jsonschema:"Effect of the taint"`
+	Key    string `json:"key" jsonschema:"Key"`
+	Value  string `json:"value" jsonschema:"Value"`
+	Effect string `json:"effect" jsonschema:"Effect"`
 }
 
 // NodeInfo represents node information.
@@ -102,12 +103,7 @@ func RegisterNodesGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 
 		// Build result
 		result := buildNodeGetResult(node, pods.Items)
-
-		// Build fallback text
-		fallbackText := fmt.Sprintf("Node '%s' has status '%s' with roles '%s'. Allocated CPU: %s, Memory: %s. Pod count: %d.",
-			result.Name, result.Status, result.Roles, result.Allocated.RequestsCPU, result.Allocated.RequestsMemory, result.Allocated.PodCount)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 

@@ -2,12 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -58,14 +58,8 @@ func RegisterResourceQuotasGet(s *server.MCPServer, client *k8s.Client, log *slo
 			return mcp.NewToolResultErrorf("failed to get resource quota '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		// Build result
 		result := buildResourceQuotaGetResult(quota)
-
-		// Build fallback text
-		fallbackText := fmt.Sprintf("ResourceQuota '%s' in namespace '%s'. Requests CPU: %s, Memory: %s. Limits CPU: %s, Memory: %s.",
-			result.Name, result.Namespace, result.RequestsCPU, result.RequestsMemory, result.LimitsCPU, result.LimitsMemory)
-
-		return mcp.NewToolResultStructured(result, fallbackText), nil
+		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 
