@@ -65,14 +65,20 @@ type EventSummary struct {
 
 // NodeSummary is the trimmed representation of a node used by nodes_list.
 type NodeSummary struct {
-	Name           string           `json:"name" jsonschema:"Name of the node"`
-	Status         string           `json:"status" jsonschema:"Status of the node"`
-	Roles          []string         `json:"roles" jsonschema:"Roles of the node"`
-	Age            string           `json:"age" jsonschema:"Age of the node"`
-	KubeletVersion string           `json:"kubelet_version" jsonschema:"Kubelet version of the node"`
-	ImageVersion   string           `json:"image_version" jsonschema:"OS image version of the node"`
-	InternalIP     string           `json:"internal_ip" jsonschema:"Internal IP address of the node"`
-	Capacity       NodeCapacityInfo `json:"capacity" jsonschema:"Capacity of the node"`
+	NodeCapacityInfo
+
+	Name           string   `json:"name" jsonschema:"Name of the node"`
+	Status         string   `json:"status" jsonschema:"Status of the node"`
+	Roles          []string `json:"roles" jsonschema:"Roles of the node"`
+	Age            string   `json:"age" jsonschema:"Age of the node"`
+	KubeletVersion string   `json:"kubelet_version" jsonschema:"Kubelet version of the node"`
+	ImageVersion   string   `json:"image_version" jsonschema:"OS image version of the node"`
+	InternalIP     string   `json:"internal_ip" jsonschema:"Internal IP address of the node"`
+}
+
+// NodeSpec is the trimmed representation of a node spec used by nodes_get.
+type NodeSpec struct {
+	Unschedulable bool `json:"unschedulable" jsonschema:"Whether the node is unschedulable"`
 }
 
 // NodeCapacityInfo is the trimmed representation of a node's capacity used by nodes_list.

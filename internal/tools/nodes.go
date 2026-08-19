@@ -1,28 +1,34 @@
 package tools
 
 import (
-	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 )
 
-// toNodeSummary converts a pod to a NodeSummary.
-func toNodeSummary(node corev1.Node) NodeSummary {
+// toNodeSummary converts a node to a NodeSummary.
+func toNodeSummary(node *corev1.Node) NodeSummary {
 	return NodeSummary{
 		Name:           node.Name,
-		Status:         deriveNodeStatus(&node),
-		Roles:          deriveNodeRoles(&node),
+		Status:         deriveNodeStatus(node),
+		Roles:          deriveNodeRoles(node),
 		Age:            formatAge(node.CreationTimestamp),
 		KubeletVersion: node.Status.NodeInfo.KubeletVersion,
 		ImageVersion:   node.Status.NodeInfo.OSImage,
-		InternalIP:     getInternalIP(&node),
-		Capacity: NodeCapacityInfo{
+		InternalIP:     getInternalIP(node),
+		NodeCapacityInfo: NodeCapacityInfo{
 			CPU:    node.Status.Capacity.Cpu().String(),
 			Memory: node.Status.Capacity.Memory().String(),
 			Pods:   int(node.Status.Capacity.Pods().Value()),
 		},
+	}
+}
+
+func toNodeSpec(node *corev1.Node) NodeSpec {
+	return NodeSpec{
+		Unschedulable: node.Spec.Unschedulable,
 	}
 }
 
@@ -81,55 +87,69 @@ func getInternalIP(node *corev1.Node) string {
 	return ""
 }
 
-// computeNodeAllocations computes resource allocations for each node.
-func computeNodeAllocations(pods []corev1.Pod) map[string]*NodeAllocations {
-	allocations := make(map[string]*NodeAllocations)
+func extractNodeAnnotations(annotations map[string]string) map[string]string {
+	result := make(map[string]string)
 
-	for _, pod := range pods {
-		if pod.Spec.NodeName == "" {
+	ignoreKeys := []string{
+		"node.alpha.kubernetes.io/ttl",
+	}
+	ignoreKeysPrefix := []string{
+		"extensions.talos.dev/",
+		"talos.dev/owned",
+	}
+
+	for k, v := range annotations {
+		if slices.Contains(ignoreKeys, k) {
 			continue
 		}
 
-		nodeName := pod.Spec.NodeName
-		if allocations[nodeName] == nil {
-			allocations[nodeName] = &NodeAllocations{}
-		}
-
-		alloc := allocations[nodeName]
-
-		for _, container := range pod.Spec.Containers {
-			// Sum requests
-			if container.Resources.Requests != nil {
-				if cpu, ok := container.Resources.Requests[corev1.ResourceCPU]; ok {
-					alloc.RequestsCPU = addQuantity(alloc.RequestsCPU, cpu.String())
-				}
-				if mem, ok := container.Resources.Requests[corev1.ResourceMemory]; ok {
-					alloc.RequestsMemory = addQuantity(alloc.RequestsMemory, mem.String())
-				}
-			}
-
-			// Sum limits
-			if container.Resources.Limits != nil {
-				if cpu, ok := container.Resources.Limits[corev1.ResourceCPU]; ok {
-					alloc.LimitsCPU = addQuantity(alloc.LimitsCPU, cpu.String())
-				}
-				if mem, ok := container.Resources.Limits[corev1.ResourceMemory]; ok {
-					alloc.LimitsMemory = addQuantity(alloc.LimitsMemory, mem.String())
-				}
+		ignore := false
+		for _, prefix := range ignoreKeysPrefix {
+			if strings.HasPrefix(k, prefix) {
+				ignore = true
+				break
 			}
 		}
+		if ignore {
+			continue
+		}
+
+		result[k] = v
 	}
 
-	return allocations
+	return result
 }
 
-// addQuantity adds two quantity strings (simplified implementation).
-func addQuantity(q1, q2 string) string {
-	if q1 == "" {
-		return q2
+func extractNodeLabels(labels map[string]string) map[string]string {
+	result := make(map[string]string)
+
+	ignoreKeys := []string{
+		"kubernetes.io/role",
 	}
-	if q2 == "" {
-		return q1
+	ignoreKeysPrefix := []string{
+		"beta.kubernetes.io/",
+		"failure-domain.beta.kubernetes.io/",
+		"extensions.talos.dev/",
 	}
-	return fmt.Sprintf("%s+%s", q1, q2) // Simplified - in production, use resource.ParseQuantity
+
+	for k, v := range labels {
+		if slices.Contains(ignoreKeys, k) {
+			continue
+		}
+
+		ignore := false
+		for _, prefix := range ignoreKeysPrefix {
+			if strings.HasPrefix(k, prefix) {
+				ignore = true
+				break
+			}
+		}
+		if ignore {
+			continue
+		}
+
+		result[k] = v
+	}
+
+	return result
 }

@@ -17,35 +17,12 @@ import (
 // NodeGetResult represents the result of getting a node.
 type NodeGetResult struct {
 	NodeSummary
+	NodeSpec
 
-	Labels      map[string]string `json:"labels" jsonschema:"Labels of the node"`
-	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the node"`
-	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the node"`
-
-	Allocated  *AllocatedInfo  `json:"allocated,omitempty" jsonschema:"Allocated resource information"`
-	Taints     []TaintInfo     `json:"taints,omitempty" jsonschema:"List of taints"`
-	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"List of conditions"`
-
-	// Pods     []PodSummary `json:"pods,omitempty" jsonschema:"List of pods running on the node"`
-}
-
-// NodeInfo represents node information.
-type NodeInfo struct {
-	KubeletVersion          string `json:"kubelet_version" jsonschema:"Kubelet version"`
-	OSImage                 string `json:"os_image" jsonschema:"OS image"`
-	ContainerRuntimeVersion string `json:"container_runtime_version" jsonschema:"Container runtime version"`
-	KernelVersion           string `json:"kernel_version" jsonschema:"Kernel version"`
-}
-
-// AllocatedInfo holds allocated resource information for a node.
-type AllocatedInfo struct {
-	RequestsCPU    string `json:"requests_cpu" jsonschema:"CPU requests (used/allocatable)"`
-	RequestsMemory string `json:"requests_memory" jsonschema:"Memory requests (used/allocatable)"`
-	LimitsCPU      string `json:"limits_cpu" jsonschema:"CPU limits (used/allocatable)"`
-	LimitsMemory   string `json:"limits_memory" jsonschema:"Memory limits (used/allocatable)"`
-	AllocatableCPU string `json:"allocatable_cpu" jsonschema:"Allocatable CPU"`
-	AllocatableMem string `json:"allocatable_memory" jsonschema:"Allocatable memory"`
-	PodCount       int    `json:"pod_count" jsonschema:"Number of pods"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
+	Taints      []TaintInfo       `json:"taints,omitempty" jsonschema:"List of taints"`
+	Conditions  []ConditionInfo   `json:"conditions,omitempty" jsonschema:"List of conditions"`
 }
 
 // NodeAllocations holds computed resource allocations for a node.
@@ -77,7 +54,6 @@ func RegisterNodesGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 
 		log.DebugContext(ctx, "nodes_get called", "name", name)
 
-		// Get the node
 		node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -101,39 +77,14 @@ func RegisterNodesGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 }
 
 // buildNodeGetResult builds a NodeGetResult from a Node.
-func buildNodeGetResult(node *corev1.Node, pods []corev1.Pod) *NodeGetResult {
+func buildNodeGetResult(node *corev1.Node, _ []corev1.Pod) *NodeGetResult {
 	result := &NodeGetResult{
-		NodeSummary: toNodeSummary(*node),
-		Labels:      node.Labels,
-		Annotations: node.Annotations,
-		Spec:        make(map[string]any),
+		NodeSummary: toNodeSummary(node),
+		NodeSpec:    toNodeSpec(node),
+		Annotations: extractNodeAnnotations(node.Annotations),
+		Labels:      extractNodeLabels(node.Labels),
 		Taints:      make([]TaintInfo, 0, len(node.Spec.Taints)),
 		Conditions:  make([]ConditionInfo, 0, len(node.Status.Conditions)),
-	}
-
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
-	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
-	}
-
-	// Spec (simplified)
-	result.Spec["unschedulable"] = node.Spec.Unschedulable
-
-	// Allocated resources
-	allocMap := computeNodeAllocations(pods)
-	alloc := allocMap[node.Name]
-	if alloc != nil {
-		result.Allocated = &AllocatedInfo{
-			RequestsCPU:    alloc.RequestsCPU,
-			RequestsMemory: alloc.RequestsMemory,
-			LimitsCPU:      alloc.LimitsCPU,
-			LimitsMemory:   alloc.LimitsMemory,
-			AllocatableCPU: node.Status.Allocatable.Cpu().String(),
-			AllocatableMem: node.Status.Allocatable.Memory().String(),
-			PodCount:       len(pods),
-		}
 	}
 
 	// Taints
@@ -154,17 +105,6 @@ func buildNodeGetResult(node *corev1.Node, pods []corev1.Pod) *NodeGetResult {
 			Message: cond.Message,
 		})
 	}
-
-	// Pods
-	// if len(pods) > 0 {
-	// 	cappedPods := pods
-	// 	if len(pods) > 15 {
-	// 		cappedPods = pods[:15]
-	// 	}
-	// 	for _, pod := range cappedPods {
-	// 		result.Pods = append(result.Pods, toPodSummary(pod))
-	// 	}
-	// }
 
 	return result
 }

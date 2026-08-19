@@ -45,7 +45,7 @@ func RegisterNodesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 
 		// Build result
 		for _, node := range nodes.Items {
-			result.Nodes = append(result.Nodes, toNodeSummary(node))
+			result.Nodes = append(result.Nodes, toNodeSummary(&node))
 		}
 
 		// Build fallback text
