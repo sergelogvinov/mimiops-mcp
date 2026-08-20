@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
+	"github.com/sergelogvinov/mimiops-mcp/internal/utils"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -33,6 +34,7 @@ type Client struct {
 	kubernetes.Interface
 
 	configFlags *genericclioptions.ConfigFlags
+	sanitizer   *utils.Sanitizer
 
 	// ContextName is the resolved active context (from --context or current-context).
 	ContextName string
@@ -78,6 +80,11 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		return nil, err
 	}
 
+	sanitizer, err := utils.NewDefaultSanitizer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create log sanitizer: %v", err)
+	}
+
 	return &Client{
 		configFlags: cfg.ConfigFlags,
 		Interface:   clientSet,
@@ -85,6 +92,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		ClusterName: resolved.cluster,
 		Namespace:   resolved.namespace,
 		User:        resolved.user,
+		sanitizer:   sanitizer,
 	}, nil
 }
 
@@ -96,6 +104,11 @@ func (c *Client) ToRawKubeConfigLoader() *genericclioptions.ConfigFlags {
 // ToRESTConfig returns the REST config for the active context, cluster, and namespace.
 func (c *Client) ToRESTConfig() (*rest.Config, error) {
 	return c.configFlags.ToRESTConfig()
+}
+
+// Sanitizer returns the log sanitizer for masking sensitive values in logs.
+func (c *Client) Sanitizer() *utils.Sanitizer {
+	return c.sanitizer
 }
 
 type resolvedIdentity struct {

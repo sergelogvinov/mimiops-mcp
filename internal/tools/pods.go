@@ -112,6 +112,10 @@ func fetchPodLogStream(ctx context.Context, client *k8s.Client, namespace, podNa
 		return LogStream{}, fmt.Errorf("failed to read logs for pod '%s' container '%s': %v", podName, container, err)
 	}
 
+	if client.Sanitizer() != nil {
+		logContent = []byte(client.Sanitizer().Sanitize(string(logContent)))
+	}
+
 	return LogStream{
 		Pod:       podName,
 		Container: container,
