@@ -160,12 +160,12 @@ image-%:
 		-f Dockerfile .
 
 .PHONY: images-checks
-images-checks: images image-tools-check
-	trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL --no-progress $(OCIREPO)/image-mimiops-mcp:$(TAG)
+images-checks: images
+	trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL --no-progress $(OCIREPO)/mimiops-mcp:$(TAG)
 
 .PHONY: images-cosign
 images-cosign:
-	@cosign sign --yes $(COSING_ARGS) --recursive $(OCIREPO)/image-mimiops-mcp:$(TAG)
+	@cosign sign --yes $(COSING_ARGS) --recursive $(OCIREPO)/mimiops-mcp:$(TAG)
 
 .PHONY: images
 images: image-mimiops-mcp ## Build images
