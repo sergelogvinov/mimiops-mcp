@@ -1,7 +1,7 @@
 # syntax = docker/dockerfile:1.22
 ########################################
 
-FROM --platform=${BUILDPLATFORM} golang:1.26.5-alpine AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.26.6-alpine AS builder
 RUN apk update && apk add --no-cache make
 ENV GO111MODULE=on
 WORKDIR /src
@@ -17,7 +17,7 @@ RUN make build-all-archs
 
 ########################################
 
-FROM --platform=${TARGETARCH} scratch AS release
+FROM --platform=${TARGETARCH} scratch AS mimiops-mcp
 LABEL org.opencontainers.image.source="https://github.com/sergelogvinov/mimiops-mcp" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.description="Mimi Ops is an opinionated MCP server for Kubernetes"
