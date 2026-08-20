@@ -2,8 +2,8 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -17,12 +17,13 @@ import (
 // PodDescribeResult represents the result of describing a pod.
 type PodDescribeResult struct {
 	PodSummary
+	PodSpec
 
-	Labels      map[string]string `json:"labels" jsonschema:"Labels of the Pod"`
-	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the Pod"`
-	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the Pod"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 
-	Containers []ContainerInfo `json:"containers" jsonschema:"List of containers in the pod"`
+	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"Conditions"`
+	Events     []EventSummary  `json:"events,omitempty" jsonschema:"List of events"`
 }
 
 // RegisterPodsDescribe adds the pods_describe tool, which provides a structured pod summary.
@@ -71,30 +72,39 @@ func RegisterPodsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodDescribeResult {
 	result := &PodDescribeResult{
 		PodSummary:  toPodSummary(ctx, client, pod),
-		Labels:      pod.Labels,
-		Annotations: pod.Annotations,
-		Spec:        make(map[string]any),
+		PodSpec:     toPodSpec(pod),
+		Annotations: extractAnnotations(pod.Annotations),
+		Labels:      extractLabels(pod.Labels),
+		Conditions:  toPodConditionInfo(pod),
 	}
 
-	if result.Labels == nil {
-		result.Labels = make(map[string]string)
+	// List events
+	events, err := client.CoreV1().Events(pod.Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return result
 	}
-	if result.Annotations == nil {
-		result.Annotations = make(map[string]string)
+
+	result.Events = make([]EventSummary, 0, len(events.Items))
+	for _, e := range events.Items {
+		if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == pod.Name {
+			firstSeen := ""
+			if !e.FirstTimestamp.IsZero() {
+				firstSeen = formatAge(e.FirstTimestamp)
+			}
+
+			result.Events = append(result.Events, EventSummary{
+				FirstSeen: firstSeen,
+				Age:       formatEventAge(e),
+				Message:   fmt.Sprintf("%s: %s", e.InvolvedObject.FieldPath, e.Message),
+				Reason:    e.Reason,
+				Type:      e.Type,
+			})
+		}
 	}
 
-	// Remove internal annotations
-	maps.DeleteFunc(result.Annotations, func(k, _ string) bool {
-		return k == "kubectl.kubernetes.io/last-applied-configuration"
-	})
-
-	// Spec (simplified)
-	result.Spec["nodeName"] = pod.Spec.NodeName
-	result.Spec["restartPolicy"] = pod.Spec.RestartPolicy
-	result.Spec["serviceAccountName"] = pod.Spec.ServiceAccountName
-
-	// Containers
-	result.Containers = toContainerInfoList(pod.Spec.Containers)
+	if len(result.Events) > 50 {
+		result.Events = result.Events[:50]
+	}
 
 	return result
 }

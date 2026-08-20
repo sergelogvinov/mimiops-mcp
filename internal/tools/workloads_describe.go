@@ -10,6 +10,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // WorkloadDescribeResult represents the result of describing a workload.
@@ -19,6 +20,9 @@ type WorkloadDescribeResult struct {
 
 	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
+
+	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"Conditions"`
+	Pods       []PodSummary    `json:"pods,omitempty" jsonschema:"List of pods owned by the workload"`
 }
 
 // RegisterWorkloadsDescribe adds the workloads_describe tool, which provides
@@ -73,13 +77,13 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client, log *slo
 			return mcp.NewToolResultErrorf("failed to get %s '%s' in namespace '%s': %v", resolvedKind, name, namespace, err), nil
 		}
 
-		result := buildWorkloadDescribeResult(workload)
+		result := buildWorkloadDescribeResult(ctx, workload, client)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	})
 }
 
 // buildWorkloadDescribeResult builds a WorkloadDescribeResult from a workload object.
-func buildWorkloadDescribeResult(workload any) *WorkloadDescribeResult {
+func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.Client) *WorkloadDescribeResult {
 	result := &WorkloadDescribeResult{}
 
 	switch w := workload.(type) {
@@ -90,6 +94,15 @@ func buildWorkloadDescribeResult(workload any) *WorkloadDescribeResult {
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.Strategy.Type)
 
+		for _, cond := range w.Status.Conditions {
+			result.Conditions = append(result.Conditions, ConditionInfo{
+				Type:    string(cond.Type),
+				Status:  string(cond.Status),
+				Reason:  cond.Reason,
+				Message: cond.Message,
+			})
+		}
+
 	case *appsv1.StatefulSet:
 		result.WorkloadSummary = toWorkloadSummaryStatefulSet(w)
 		result.Labels = extractLabels(w.Labels)
@@ -97,12 +110,52 @@ func buildWorkloadDescribeResult(workload any) *WorkloadDescribeResult {
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
 
+		for _, cond := range w.Status.Conditions {
+			result.Conditions = append(result.Conditions, ConditionInfo{
+				Type:    string(cond.Type),
+				Status:  string(cond.Status),
+				Reason:  cond.Reason,
+				Message: cond.Message,
+			})
+		}
+
 	case *appsv1.DaemonSet:
 		result.WorkloadSummary = toWorkloadSummaryDaemonSet(w)
 		result.Labels = extractLabels(w.Labels)
 		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
+
+		for _, cond := range w.Status.Conditions {
+			result.Conditions = append(result.Conditions, ConditionInfo{
+				Type:    string(cond.Type),
+				Status:  string(cond.Status),
+				Reason:  cond.Reason,
+				Message: cond.Message,
+			})
+		}
+	}
+
+	pods, err := client.CoreV1().Pods(result.Namespace).List(ctx, metav1.ListOptions{LabelSelector: result.Selector})
+	if err == nil {
+		result.Pods = make([]PodSummary, 0, len(pods.Items))
+		for _, pod := range pods.Items {
+			node := pod.Spec.NodeName
+			if node == "" {
+				node = "<pending>"
+			}
+
+			podInfo := PodSummary{
+				Name:     pod.Name,
+				Ready:    formatReady(pod.Status),
+				Status:   string(pod.Status.Phase),
+				Restarts: containerRestartCount(pod.Status),
+				Age:      formatAge(pod.CreationTimestamp),
+				Node:     node,
+			}
+
+			result.Pods = append(result.Pods, podInfo)
+		}
 	}
 
 	return result

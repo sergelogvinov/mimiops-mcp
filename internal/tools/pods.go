@@ -53,6 +53,19 @@ func toPodSummary(ctx context.Context, client kubernetes.Interface, pod *corev1.
 	}
 }
 
+func toPodConditionInfo(pod *corev1.Pod) []ConditionInfo {
+	conditions := make([]ConditionInfo, 0, len(pod.Status.Conditions))
+	for _, cond := range pod.Status.Conditions {
+		conditions = append(conditions, ConditionInfo{
+			Type:    string(cond.Type),
+			Status:  string(cond.Status),
+			Reason:  cond.Reason,
+			Message: cond.Message,
+		})
+	}
+	return conditions
+}
+
 // fetchPodLogStream fetches logs from a single pod and returns a LogStream.
 func fetchPodLogStream(ctx context.Context, client *k8s.Client, namespace, podName, container string, tail, sinceSeconds int, previous bool) (LogStream, error) {
 	// Get pod to check container names

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -68,28 +67,9 @@ func RegisterJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 func buildJobGetResult(job *batchv1.Job) *JobGetResult {
 	result := &JobGetResult{
 		JobSummary:  toJobSummary(job),
+		JobSpec:     toJobSpec(job),
 		Annotations: extractAnnotations(job.Annotations),
 		Labels:      extractLabels(job.Labels),
-		JobSpec: JobSpec{
-			PodSpec: PodSpec{
-				RestartPolicy:     string(job.Spec.Template.Spec.RestartPolicy),
-				ServiceAccount:    job.Spec.Template.Spec.ServiceAccountName,
-				PriorityClassName: job.Spec.Template.Spec.PriorityClassName,
-				InitContainers:    toContainerInfoList(job.Spec.Template.Spec.InitContainers),
-				Containers:        toContainerInfoList(job.Spec.Template.Spec.Containers),
-				Volumes:           extractVolumeNames(job.Spec.Template.Spec.Volumes),
-			},
-		},
-	}
-
-	if job.Spec.Parallelism != nil {
-		result.JobSpec.Parallelism = fmt.Sprintf("%d", *job.Spec.Parallelism)
-	}
-	if job.Spec.BackoffLimit != nil {
-		result.JobSpec.BackoffLimit = fmt.Sprintf("%d", *job.Spec.BackoffLimit)
-	}
-	if job.Spec.ActiveDeadlineSeconds != nil {
-		result.JobSpec.ActiveDeadlineSeconds = fmt.Sprintf("%d", *job.Spec.ActiveDeadlineSeconds)
 	}
 
 	return result

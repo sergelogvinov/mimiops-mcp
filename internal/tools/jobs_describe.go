@@ -10,7 +10,6 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -18,14 +17,13 @@ import (
 // JobDescribeResult represents the result of describing a Job.
 type JobDescribeResult struct {
 	JobSummary
+	JobSpec
 
-	Labels      map[string]string `json:"labels" jsonschema:"labels of the Job"`
-	Annotations map[string]string `json:"annotations" jsonschema:"annotations of the Job"`
-	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the Job"`
+	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
+	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 
-	// Containers []ContainerInfo `json:"containers" jsonschema:"List of containers in the Job's pod template"`
-	Conditions []ConditionInfo `json:"conditions" jsonschema:"List of conditions of the Job"`
-	Pods       []PodInfo       `json:"pods" jsonschema:"List of pods owned by the Job"`
+	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"List of conditions of the Job"`
+	Pods       []PodSummary    `json:"pods,omitempty" jsonschema:"List of pods owned by the Job"`
 }
 
 // RegisterJobsDescribe adds the jobs_describe tool, which provides a structured Job summary.
@@ -77,9 +75,9 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 func buildJobDescribeResult(ctx context.Context, job *batchv1.Job, client *k8s.Client) (*JobDescribeResult, error) {
 	result := &JobDescribeResult{
 		JobSummary:  toJobSummary(job),
+		JobSpec:     toJobSpec(job),
 		Annotations: extractAnnotations(job.Annotations),
 		Labels:      extractLabels(job.Labels),
-		Spec:        make(map[string]any),
 	}
 
 	// Conditions
@@ -93,38 +91,28 @@ func buildJobDescribeResult(ctx context.Context, job *batchv1.Job, client *k8s.C
 		})
 	}
 
-	// Pods - list pods by Job owner reference
-	pods, err := client.CoreV1().Pods(job.Namespace).List(ctx, metav1.ListOptions{})
+	// Pods - list pods by Job
+	pods, err := client.CoreV1().Pods(job.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", job.Name),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods: %w", err)
 	}
 
-	// Filter pods by Job owner reference
-	var ownedPods []corev1.Pod
+	result.Pods = make([]PodSummary, 0, len(pods.Items))
 	for _, pod := range pods.Items {
-		if metav1.GetControllerOf(&pod) != nil && metav1.GetControllerOf(&pod).UID == job.UID {
-			ownedPods = append(ownedPods, pod)
-		}
-	}
-
-	result.Pods = make([]PodInfo, 0, len(ownedPods))
-	for _, pod := range ownedPods {
-		podInfo := PodInfo{
-			Name:  pod.Name,
-			Phase: string(pod.Status.Phase),
+		node := pod.Spec.NodeName
+		if node == "" {
+			node = "<pending>"
 		}
 
-		// Calculate ready status
-		readyCount := 0
-		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.Ready {
-				readyCount++
-			}
-		}
-		podInfo.Ready = fmt.Sprintf("%d/%d", readyCount, len(pod.Status.ContainerStatuses))
-
-		if pod.Status.StartTime != nil {
-			podInfo.StartTime = pod.Status.StartTime.String()
+		podInfo := PodSummary{
+			Name:     pod.Name,
+			Ready:    formatReady(pod.Status),
+			Status:   string(pod.Status.Phase),
+			Restarts: containerRestartCount(pod.Status),
+			Age:      formatAge(pod.CreationTimestamp),
+			Node:     node,
 		}
 
 		result.Pods = append(result.Pods, podInfo)

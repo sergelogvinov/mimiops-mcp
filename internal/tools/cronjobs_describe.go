@@ -16,11 +16,12 @@ import (
 // CronJobDescribeResult represents the result of describing a CronJob.
 type CronJobDescribeResult struct {
 	CronJobSummary
+	CronJobSpec
 
 	Labels      map[string]string `json:"labels" jsonschema:"Labels of the CronJob"`
 	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the CronJob"`
-	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the CronJob"`
-	ActiveJobs  []string          `json:"activeJobs" jsonschema:"List of active job names"`
+
+	ActiveJobs []string `json:"activeJobs" jsonschema:"List of active job names"`
 }
 
 // RegisterCronJobsDescribe adds the cronjobs_describe tool, which provides a structured CronJob summary.
@@ -72,21 +73,13 @@ func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog
 func buildCronJobDescribeResult(cj *batchv1.CronJob) (*CronJobDescribeResult, error) {
 	result := &CronJobDescribeResult{
 		CronJobSummary: toCronJobSummary(cj),
+		CronJobSpec:    toCronJobSpec(cj),
 		Annotations:    extractAnnotations(cj.Annotations),
 		Labels:         extractLabels(cj.Labels),
+		ActiveJobs:     make([]string, 0, len(cj.Status.Active)),
 	}
 
-	// Spec (simplified)
-	result.Spec = make(map[string]any)
-	result.Spec["schedule"] = cj.Spec.Schedule
-	result.Spec["suspend"] = cj.Spec.Suspend
-	result.Spec["concurrencyPolicy"] = cj.Spec.ConcurrencyPolicy
-	result.Spec["startingDeadlineSeconds"] = cj.Spec.StartingDeadlineSeconds
-	result.Spec["successfulJobsHistoryLimit"] = cj.Spec.SuccessfulJobsHistoryLimit
-	result.Spec["failedJobsHistoryLimit"] = cj.Spec.FailedJobsHistoryLimit
-
 	// Active Jobs
-	result.ActiveJobs = make([]string, 0, len(cj.Status.Active))
 	for _, job := range cj.Status.Active {
 		result.ActiveJobs = append(result.ActiveJobs, job.Name)
 	}

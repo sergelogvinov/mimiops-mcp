@@ -56,10 +56,11 @@ type StorageClassSummary struct {
 // EventSummary is the trimmed representation of an event used by events_get.
 type EventSummary struct {
 	Namespace string `json:"namespace,omitempty" jsonschema:"Namespace of the event"`
-	LastSeen  string `json:"last_seen" jsonschema:"Last seen time of the event"`
 	Type      string `json:"type" jsonschema:"Type of the event (Normal or Warning)"`
 	Reason    string `json:"reason" jsonschema:"Reason for the event"`
-	Object    string `json:"object" jsonschema:"Object involved in the event"`
+	FirstSeen string `json:"first_seen,omitempty" jsonschema:"First seen time of the event"`
+	Age       string `json:"age,omitempty" jsonschema:"Last seen time of the event"`
+	Object    string `json:"object,omitempty" jsonschema:"Object involved in the event"`
 	Message   string `json:"message" jsonschema:"Message of the event"`
 }
 
@@ -78,7 +79,8 @@ type NodeSummary struct {
 
 // NodeSpec is the trimmed representation of a node spec used by nodes_get.
 type NodeSpec struct {
-	Unschedulable bool `json:"unschedulable" jsonschema:"Whether the node is unschedulable"`
+	Unschedulable bool        `json:"unschedulable" jsonschema:"Whether the node is unschedulable"`
+	Taints        []TaintInfo `json:"taints,omitempty" jsonschema:"List of taints"`
 }
 
 // NodeCapacityInfo is the trimmed representation of a node's capacity used by nodes_list.
@@ -153,7 +155,7 @@ type JobSpec struct {
 // PodSummary is the trimmed, agent-friendly representation of a pod used by
 // pods_list (and available in the JSON output of other pod tools).
 type PodSummary struct {
-	Namespace       string           `json:"namespace" jsonschema:"Namespace"`
+	Namespace       string           `json:"namespace,omitempty" jsonschema:"Namespace"`
 	Name            string           `json:"name" jsonschema:"Name"`
 	Ready           string           `json:"ready" jsonschema:"Ready status (e.g., 1/2)"`
 	Restarts        int32            `json:"restarts" jsonschema:"Restarts"`
@@ -165,12 +167,15 @@ type PodSummary struct {
 
 // PodSpec is the trimmed representation of a pod spec used by pods_get and jobs_get and workloads_get.
 type PodSpec struct {
-	RestartPolicy     string          `json:"restart_policy,omitempty" jsonschema:"restart policy"`
-	ServiceAccount    string          `json:"service_account,omitempty" jsonschema:"ServiceAccount"`
-	PriorityClassName string          `json:"priority_class_name,omitempty" jsonschema:"PriorityClassName"`
-	InitContainers    []ContainerInfo `json:"init_containers,omitempty" jsonschema:"List of init containers"`
-	Containers        []ContainerInfo `json:"containers" jsonschema:"List of containers"`
-	Volumes           []string        `json:"volumes,omitempty" jsonschema:"List of volumes names"`
+	RestartPolicy     string            `json:"restart_policy,omitempty" jsonschema:"restart policy"`
+	ServiceAccount    string            `json:"service_account,omitempty" jsonschema:"ServiceAccount"`
+	PriorityClassName string            `json:"priority_class_name,omitempty" jsonschema:"PriorityClassName"`
+	InitContainers    []ContainerInfo   `json:"init_containers,omitempty" jsonschema:"List of init containers"`
+	Containers        []ContainerInfo   `json:"containers" jsonschema:"List of containers"`
+	Volumes           []string          `json:"volumes,omitempty" jsonschema:"List of volumes names"`
+	NodeSelector      map[string]string `json:"nodeSelector,omitempty" jsonschema:"Node selector"`
+	Tolerations       []TolerationInfo  `json:"tolerations,omitempty" jsonschema:"Tolerations"`
+	QOSClass          string            `json:"qos_class,omitempty" jsonschema:"Quality of Service class"`
 }
 
 // PodInfo represents information about a pod.

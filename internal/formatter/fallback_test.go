@@ -55,10 +55,14 @@ func TestToMarkdown(t *testing.T) {
 				Ready:     "1/1",
 				Restarts:  0,
 			},
-			expectedOutput: `- **namespace**: default
-- **name**: my-pod
-- **ready**: 1/1
-- **restarts**: 0
+			expectedOutput: `namespace: default
+
+name: my-pod
+
+ready: 1/1
+
+restarts: 0
+
 `,
 		},
 		{
@@ -72,11 +76,16 @@ func TestToMarkdown(t *testing.T) {
 				Ready:    "1/1",
 				Restarts: 0,
 			},
-			expectedOutput: `- **namespace**: default
-- **name**: my-pod
-- **labels**: app=my-app
-- **ready**: 1/1
-- **restarts**: 0
+			expectedOutput: `namespace: default
+
+name: my-pod
+
+labels: app=my-app
+
+ready: 1/1
+
+restarts: 0
+
 `,
 		},
 		{
@@ -94,14 +103,19 @@ func TestToMarkdown(t *testing.T) {
 					},
 				},
 			},
-			expectedOutput: `- **namespace**: default
-- **name**: my-pod
-- **ready**: 1/1
-- **restarts**: 0
-- **ownerReferences**: 
-    | apiVersion | kind | name |
-    | --- | --- | --- |
-    | v1 | Deployment | my-deployment |
+			expectedOutput: `namespace: default
+
+name: my-pod
+
+ready: 1/1
+
+restarts: 0
+
+ownerReferences: 
+| apiVersion | kind | name |
+| --- | --- | --- |
+| v1 | Deployment | my-deployment |
+
 
 `,
 		},
@@ -126,18 +140,27 @@ func TestToMarkdown(t *testing.T) {
 					Volumes:           []string{"volume1", "volume2"},
 				},
 			},
-			expectedOutput: `- **restart policy**: Always
-- **ServiceAccount**: default
-- **PriorityClassName**: high-priority
-- **List of volumes names**: volume1, volume2
-- **namespace**: default
-- **name**: my-pod
-- **ready**: 1/1
-- **restarts**: 0
-- **ownerReferences**: 
-    | apiVersion | kind | name |
-    | --- | --- | --- |
-    | v1 | Deployment | my-deployment |
+			expectedOutput: `restart policy: Always
+
+ServiceAccount: default
+
+PriorityClassName: high-priority
+
+List of volumes names: volume1, volume2
+
+namespace: default
+
+name: my-pod
+
+ready: 1/1
+
+restarts: 0
+
+ownerReferences: 
+| apiVersion | kind | name |
+| --- | --- | --- |
+| v1 | Deployment | my-deployment |
+
 
 `,
 		},

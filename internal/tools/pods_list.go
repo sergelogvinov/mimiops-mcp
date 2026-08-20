@@ -46,17 +46,8 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 			"field_selector", fieldSelector,
 		)
 
-		// Build list options
-		opts := metav1.ListOptions{}
-		if labelSelector != "" {
-			opts.LabelSelector = labelSelector
-		}
-		if fieldSelector != "" {
-			opts.FieldSelector = fieldSelector
-		}
-
 		// List pods
-		pods, err := client.CoreV1().Pods(namespace).List(ctx, opts)
+		pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return mcp.NewToolResultErrorf("no pods found"), nil

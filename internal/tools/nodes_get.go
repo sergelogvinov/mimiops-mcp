@@ -21,8 +21,8 @@ type NodeGetResult struct {
 
 	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
-	Taints      []TaintInfo       `json:"taints,omitempty" jsonschema:"List of taints"`
-	Conditions  []ConditionInfo   `json:"conditions,omitempty" jsonschema:"List of conditions"`
+
+	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"List of conditions"`
 }
 
 // NodeAllocations holds computed resource allocations for a node.
@@ -83,27 +83,7 @@ func buildNodeGetResult(node *corev1.Node, _ []corev1.Pod) *NodeGetResult {
 		NodeSpec:    toNodeSpec(node),
 		Annotations: extractNodeAnnotations(node.Annotations),
 		Labels:      extractNodeLabels(node.Labels),
-		Taints:      make([]TaintInfo, 0, len(node.Spec.Taints)),
-		Conditions:  make([]ConditionInfo, 0, len(node.Status.Conditions)),
-	}
-
-	// Taints
-	for _, taint := range node.Spec.Taints {
-		result.Taints = append(result.Taints, TaintInfo{
-			Key:    taint.Key,
-			Value:  taint.Value,
-			Effect: string(taint.Effect),
-		})
-	}
-
-	// Conditions
-	for _, cond := range node.Status.Conditions {
-		result.Conditions = append(result.Conditions, ConditionInfo{
-			Type:    string(cond.Type),
-			Status:  string(cond.Status),
-			Reason:  cond.Reason,
-			Message: cond.Message,
-		})
+		Conditions:  toNodeConditionInfo(node),
 	}
 
 	return result

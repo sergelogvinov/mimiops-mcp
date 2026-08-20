@@ -15,14 +15,12 @@ import (
 // fallback text design specified in docs/fallbackText.md.
 func ToMarkdown(v any) string {
 	var buf bytes.Buffer
-	val := reflect.ValueOf(v)
 
-	// Handle nil
+	val := reflect.ValueOf(v)
 	if !val.IsValid() {
 		return ""
 	}
 
-	// Dereference pointer if needed
 	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return ""
@@ -35,29 +33,20 @@ func ToMarkdown(v any) string {
 		return ""
 	}
 
-	// Get the type
-	typ := val.Type()
-
 	// Collect all printable fields (those with jsonschema tag)
 	var fields []fieldInfo
 
 	seen := make(map[string]bool) // Track field names to avoid duplicates
-	collectFields(val, typ, &fields, &seen)
+	collectFields(val, val.Type(), &fields, &seen)
 
-	// Render each field as a bullet point
 	for _, f := range fields {
-		buf.WriteString("- **")
-		buf.WriteString(f.tag)
-		buf.WriteString("**:")
-
-		// Format the value
 		formatted := formatValue(f.value, 0)
 		if formatted != "" {
-			buf.WriteString(" ")
+			buf.WriteString(f.tag)
+			buf.WriteString(": ")
 			buf.WriteString(formatted)
+			buf.WriteString("\n\n")
 		}
-
-		buf.WriteString("\n")
 	}
 
 	return buf.String()
@@ -187,7 +176,6 @@ func formatStructSlice(v reflect.Value, depth int) string {
 
 	// Write header row
 	buf.WriteString("\n")
-	writeIndent(&buf, depth+1)
 	buf.WriteString("|")
 	for _, f := range headerFields {
 		buf.WriteString(" ")
@@ -196,7 +184,6 @@ func formatStructSlice(v reflect.Value, depth int) string {
 	}
 
 	buf.WriteString("\n")
-	writeIndent(&buf, depth+1)
 	buf.WriteString("|")
 	for range headerFields {
 		buf.WriteString(" --- |")
@@ -206,14 +193,12 @@ func formatStructSlice(v reflect.Value, depth int) string {
 	for i := range v.Len() {
 		elem := v.Index(i)
 		buf.WriteString("\n")
-		writeIndent(&buf, depth+1)
 		buf.WriteString("|")
 
 		for _, f := range headerFields {
 			fieldVal := elem.FieldByName(f.tag)
 			// Try to find the field by name (may differ due to json tag)
 			if !fieldVal.IsValid() {
-				// Find field by json name
 				fieldVal = findFieldByName(elem, f.tag)
 			}
 
@@ -279,16 +264,14 @@ func formatStruct(v reflect.Value, depth int) string {
 
 	// Write nested bullet list
 	for _, f := range fields {
-		buf.WriteString("\n")
-		writeIndent(&buf, depth+1)
-		buf.WriteString("- **")
-		buf.WriteString(f.tag)
-		buf.WriteString("**:")
-
-		formatted := formatValue(f.value, depth+1)
+		formatted := formatValue(f.value, 0)
 		if formatted != "" {
-			buf.WriteString(" ")
+			buf.WriteString("\n")
+			writeIndent(&buf, depth+1)
+			buf.WriteString(f.tag)
+			buf.WriteString(": ")
 			buf.WriteString(formatted)
+			buf.WriteString("\n\n")
 		}
 	}
 

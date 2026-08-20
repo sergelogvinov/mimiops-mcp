@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -68,30 +67,9 @@ func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logg
 func buildCronJobGetResult(cj *batchv1.CronJob) *CronJobGetResult {
 	result := &CronJobGetResult{
 		CronJobSummary: toCronJobSummary(cj),
+		CronJobSpec:    toCronJobSpec(cj),
 		Annotations:    extractAnnotations(cj.Annotations),
 		Labels:         extractLabels(cj.Labels),
-		CronJobSpec: CronJobSpec{
-			Selector:          formatMatchLabels(cj.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels),
-			ConcurrencyPolicy: string(cj.Spec.ConcurrencyPolicy),
-			PodSpec: PodSpec{
-				RestartPolicy:     string(cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy),
-				ServiceAccount:    cj.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName,
-				PriorityClassName: cj.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName,
-				InitContainers:    toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.InitContainers),
-				Containers:        toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.Containers),
-				Volumes:           extractVolumeNames(cj.Spec.JobTemplate.Spec.Template.Spec.Volumes),
-			},
-		},
-	}
-
-	if cj.Spec.StartingDeadlineSeconds != nil {
-		result.CronJobSpec.StartingDeadlineSeconds = fmt.Sprintf("%d", *cj.Spec.StartingDeadlineSeconds)
-	}
-	if cj.Spec.SuccessfulJobsHistoryLimit != nil {
-		result.CronJobSpec.SuccessfulJobsHistoryLimit = fmt.Sprintf("%d", *cj.Spec.SuccessfulJobsHistoryLimit)
-	}
-	if cj.Spec.FailedJobsHistoryLimit != nil {
-		result.CronJobSpec.FailedJobsHistoryLimit = fmt.Sprintf("%d", *cj.Spec.FailedJobsHistoryLimit)
 	}
 
 	return result

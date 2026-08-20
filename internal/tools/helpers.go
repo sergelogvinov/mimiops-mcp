@@ -94,6 +94,20 @@ func formatAgeMin(created metav1.Time) string {
 	return fmt.Sprintf("%dd", int(diff.Hours()/24))
 }
 
+func formatEventAge(event corev1.Event) string {
+	firstSeen := ""
+	if !event.FirstTimestamp.IsZero() {
+		firstSeen = formatAge(event.FirstTimestamp)
+	}
+
+	age := ""
+	if !event.LastTimestamp.IsZero() {
+		age = formatAge(event.LastTimestamp)
+	}
+
+	return fmt.Sprintf("%s (x%d over %s)", age, event.Count, firstSeen)
+}
+
 // formatDuration calculates the duration between two times.
 func formatDuration(end, start metav1.Time) string {
 	endTime := end.Time
@@ -137,11 +151,10 @@ func extractAnnotations(annotations map[string]string) map[string]string {
 	result := make(map[string]string)
 
 	ignoreKeys := []string{
-		defaultContainerAnnotation,
-		"kubectl.kubernetes.io/last-applied-configuration",
 		"deployment.kubernetes.io/revision",
 	}
 	ignoreKeysPrefix := []string{
+		"kubectl.kubernetes.io/",
 		"prometheus.io/",
 		"meta.helm.sh/",
 	}
@@ -174,9 +187,10 @@ func extractLabels(labels map[string]string) map[string]string {
 	ignoreKeys := []string{
 		"pod-template-hash",
 		"controller-revision-hash",
-		"statefulset.kubernetes.io/pod-name",
-		"controller-uid",
 		"job-name",
+		"controller-uid",
+		"statefulset.kubernetes.io/pod-name",
+		"batch.kubernetes.io/controller-uid",
 		"app.kubernetes.io/version",
 		"app.kubernetes.io/managed-by",
 	}
@@ -210,6 +224,15 @@ func extractLabels(labels map[string]string) map[string]string {
 }
 
 func toPodSpec(pod *corev1.Pod) PodSpec {
+	tolerations := make([]TolerationInfo, 0, len(pod.Spec.Tolerations))
+	for _, toleration := range pod.Spec.Tolerations {
+		tolerations = append(tolerations, TolerationInfo{
+			Key:    toleration.Key,
+			Value:  toleration.Value,
+			Effect: string(toleration.Effect),
+		})
+	}
+
 	return PodSpec{
 		RestartPolicy:     string(pod.Spec.RestartPolicy),
 		ServiceAccount:    pod.Spec.ServiceAccountName,
@@ -217,6 +240,9 @@ func toPodSpec(pod *corev1.Pod) PodSpec {
 		InitContainers:    toContainerInfoList(pod.Spec.InitContainers),
 		Containers:        toContainerInfoList(pod.Spec.Containers),
 		Volumes:           extractVolumeNames(pod.Spec.Volumes),
+		NodeSelector:      pod.Spec.NodeSelector,
+		Tolerations:       tolerations,
+		QOSClass:          string(pod.Status.QOSClass),
 	}
 }
 

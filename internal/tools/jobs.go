@@ -28,6 +28,31 @@ func toJobSummary(job *batchv1.Job) JobSummary {
 	}
 }
 
+func toJobSpec(job *batchv1.Job) JobSpec {
+	spec := JobSpec{
+		PodSpec: PodSpec{
+			RestartPolicy:     string(job.Spec.Template.Spec.RestartPolicy),
+			ServiceAccount:    job.Spec.Template.Spec.ServiceAccountName,
+			PriorityClassName: job.Spec.Template.Spec.PriorityClassName,
+			InitContainers:    toContainerInfoList(job.Spec.Template.Spec.InitContainers),
+			Containers:        toContainerInfoList(job.Spec.Template.Spec.Containers),
+			Volumes:           extractVolumeNames(job.Spec.Template.Spec.Volumes),
+		},
+	}
+
+	if job.Spec.Parallelism != nil {
+		spec.Parallelism = fmt.Sprintf("%d", *job.Spec.Parallelism)
+	}
+	if job.Spec.BackoffLimit != nil {
+		spec.BackoffLimit = fmt.Sprintf("%d", *job.Spec.BackoffLimit)
+	}
+	if job.Spec.ActiveDeadlineSeconds != nil {
+		spec.ActiveDeadlineSeconds = fmt.Sprintf("%d", *job.Spec.ActiveDeadlineSeconds)
+	}
+
+	return spec
+}
+
 // deriveJobStatus derives the status string for a Job.
 func deriveJobStatus(job *batchv1.Job) string {
 	if job.Spec.Completions != nil && job.Status.Succeeded > 0 && job.Status.Succeeded == *job.Spec.Completions {

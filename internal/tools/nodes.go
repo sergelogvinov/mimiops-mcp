@@ -27,9 +27,32 @@ func toNodeSummary(node *corev1.Node) NodeSummary {
 }
 
 func toNodeSpec(node *corev1.Node) NodeSpec {
+	taints := make([]TaintInfo, 0, len(node.Spec.Taints))
+	for _, taint := range node.Spec.Taints {
+		taints = append(taints, TaintInfo{
+			Key:    taint.Key,
+			Value:  taint.Value,
+			Effect: string(taint.Effect),
+		})
+	}
+
 	return NodeSpec{
 		Unschedulable: node.Spec.Unschedulable,
+		Taints:        taints,
 	}
+}
+
+func toNodeConditionInfo(node *corev1.Node) []ConditionInfo {
+	conditions := make([]ConditionInfo, 0, len(node.Status.Conditions))
+	for _, cond := range node.Status.Conditions {
+		conditions = append(conditions, ConditionInfo{
+			Type:    string(cond.Type),
+			Status:  string(cond.Status),
+			Reason:  cond.Reason,
+			Message: cond.Message,
+		})
+	}
+	return conditions
 }
 
 // deriveNodeStatus derives the node status from its conditions.

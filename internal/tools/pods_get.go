@@ -20,8 +20,8 @@ type PodGetResult struct {
 
 	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
-	Tolerations []TolerationInfo  `json:"tolerations,omitempty" jsonschema:"Tolerations"`
-	Conditions  []ConditionInfo   `json:"conditions,omitempty" jsonschema:"Conditions"`
+
+	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"Conditions"`
 }
 
 // RegisterPodsGet adds the pods_get tool, which gets a pod's full spec and status.
@@ -72,27 +72,7 @@ func buildPodGetResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod)
 		PodSpec:     toPodSpec(pod),
 		Annotations: extractAnnotations(pod.Annotations),
 		Labels:      extractLabels(pod.Labels),
-		Tolerations: make([]TolerationInfo, 0, len(pod.Spec.Tolerations)),
-		Conditions:  make([]ConditionInfo, 0, len(pod.Status.Conditions)),
-	}
-
-	// Tolerations
-	for _, toleration := range pod.Spec.Tolerations {
-		result.Tolerations = append(result.Tolerations, TolerationInfo{
-			Key:    toleration.Key,
-			Value:  toleration.Value,
-			Effect: string(toleration.Effect),
-		})
-	}
-
-	// Conditions
-	for _, cond := range pod.Status.Conditions {
-		result.Conditions = append(result.Conditions, ConditionInfo{
-			Type:    string(cond.Type),
-			Status:  string(cond.Status),
-			Reason:  cond.Reason,
-			Message: cond.Message,
-		})
+		Conditions:  toPodConditionInfo(pod),
 	}
 
 	return result

@@ -29,7 +29,7 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		mcp.WithToolTitle("Get Events"),
 		mcp.WithDescription("Get events from a specific namespace (or all namespaces), sorted by time (warnings first)."),
 		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
-		mcp.WithString("field_selector", mcp.Description("field selector filter")),
+		mcp.WithString("field_selector", mcp.Description("field selector filter, e.g., 'type==Warning'"), mcp.DefaultString("type==Warning")),
 		mcp.WithInteger("limit", mcp.Description("maximum number of events to return"), mcp.DefaultNumber(50)),
 		mcp.WithOutputSchema[EventsGetResult](),
 	)
@@ -40,11 +40,12 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		}
 
 		fieldSelector := req.GetString("field_selector", "")
+
 		limit := req.GetInt("limit", 50)
-		if limit <= 0 {
+		switch {
+		case limit <= 0:
 			limit = 50
-		}
-		if limit > 500 {
+		case limit > 500:
 			limit = 500
 		}
 
@@ -89,7 +90,7 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 				lastSeen = formatAge(event.LastTimestamp)
 			}
 			summary := EventSummary{
-				LastSeen:  lastSeen,
+				Age:       lastSeen,
 				Type:      event.Type,
 				Reason:    event.Reason,
 				Object:    fmt.Sprintf("%s/%s", event.InvolvedObject.Kind, event.InvolvedObject.Name),
