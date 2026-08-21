@@ -36,6 +36,11 @@ dockers_v2:
     platforms:
       - linux/amd64
       - linux/arm64
+    annotations:
+      org.opencontainers.image.title: mimiops-mcp
+      org.opencontainers.image.description: "Mimi Ops is an opinionated MCP server for Kubernetes"
+      org.opencontainers.image.url: "{{.GitURL}}"
+      org.opencontainers.image.licenses: "Apache-2.0"
 
 docker_signs:
   - id: default

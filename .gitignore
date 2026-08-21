@@ -19,6 +19,7 @@ hack/
 /bin/
 /vendor/
 /.gocache/
+/.gortex/
 
 #
 /AGENTS.md
