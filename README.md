@@ -1,66 +1,70 @@
 # Mimiops MCP Server
 
-A Kubernetes **MCP (Model Context Protocol)** server written in Go. It exposes Kubernetes pod operations to MCP clients (Claude Desktop, Cursor, VS Code, etc.) over two transports:
+## Motivation
+
+There are many ways to manage Kubernetes workloads, but there are also many ways to break them by accident.
+We have already seen cases where AI agents did something that we did not expect. Giving an AI agent full access to Kubernetes can be risky, especially when it can create, update, or delete resources directly.
+
+In my opinion, we need to provide safe and well-defined tools for AI agents. These tools should limit what an agent can do, validate changes before applying them, and help prevent dangerous operations.
+
+We also need tools that can help investigate and fix workload issues.
+Many workloads are already managed by well-known tools such as Argo CD, FluxCD, Helm, and other GitOps or deployment systems.
+An AI agent should understand who manages a resource and avoid making direct changes that can conflict with these tools.
+
+The goal is not to give AI full control of Kubernetes.
+The goal is to give AI a safe interface that allows it to understand problems, suggest changes, and perform only controlled operations.
+
+## Overview
+
+Mimi OPS is not designed to give AI agents unrestricted Kubernetes access.
+Instead, it provides a small set of well-known and controlled operations.
+
+The agent can observe, investigate, and perform a limited number of safe recovery actions. More dangerous operations, such as editing arbitrary resources, applying YAML, changing secrets, or deleting persistent data are strongly restricted.
+
+This makes Mimi OPS an opinionated interface between AI agents and Kubernetes: powerful enough for common troubleshooting, but limited enough to reduce the risk of unexpected changes.
+
+### Kubernetes basic tools:
+
+- Pods
+  - list — list pods and their current status.
+  - get — get detailed information about a pod.
+  - describe — inspect pod status, conditions, events, and related information.
+  - logs — read container logs for troubleshooting.
+  - delete — safely restart a workload by deleting a pod and allowing its controller to recreate it.
+- CronJobs and Jobs
+  - list — list CronJobs and Jobs.
+  - get — get information about a specific resource.
+  - describe — inspect status, conditions, events, and failures.
+- Deployments, StatefulSets, and DaemonSets
+  - list — list workloads and their current status.
+  - get — get information about a specific workload.
+  - describe — inspect replicas, rollout status, conditions, and related events.
+
+### Helm integration
+
+Mimi OPS can inspect Helm-managed workloads and help recover them when a deployment fails:
+
+- list — list Helm releases.
+- describe — show release information, status, revision, and related resources.
+- rollback — roll back a release to a previous working revision when the current release is in a broken state.
+
+### FluxCD integration
+
+Mimi OPS can work with FluxCD-managed resources without directly changing resources that are controlled by GitOps:
+
+- Reconcile Flux source resources to fetch the latest configuration.
+- Reconcile HelmRelease resources to retry or apply the expected Helm state.
+- Inspect reconciliation status and errors to understand why a deployment is not ready.
+
+## Installation
+
+A Kubernetes **MCP (Model Context Protocol)** server written in Go.
+It exposes Kubernetes operations to MCP clients (Claude Desktop, Cursor, VS Code, etc.) over two transports:
 
 - `mimiops-mcp mcp` — **stdio**, for desktop MCP clients.
 - `mimiops-mcp server` — **HTTP/SSE**, for web/remote MCP clients.
 
-> **Status: Stage 1 (Pods only).** The tool catalog is intentionally scoped to pod workloads (`pods_list`, `pods_get`, `pods_describe`, `pods_log`, `pods_delete`). Helm, metrics, and other workload types are out of scope for now — see `docs/2-architect-pods-only.md`.
-
----
-
-## Requirements
-
-- Go 1.26+
-- `make`
-- `golangci-lint` (for `make lint`)
-- Access to a Kubernetes cluster (kubeconfig)
-
----
-
-## Build
-
-Build the binary for the current OS/arch:
-
-```sh
-make build
-```
-
-The artifact is written to `bin/mimiops-mcp-<arch>` (e.g. `bin/mimiops-mcp-arm64`).
-
-Build for all supported architectures at once:
-
-```sh
-make build-all-archs
-```
-
-Build a specific OS/arch:
-
-```sh
-make build OS=linux ARCH=amd64
-```
-
-Cross-build the full matrix in one shot (Go cross-compiles, no CGO — binary is static):
-
-```sh
-GOOS=linux GOARCH=amd64 make build
-```
-
----
-
 ## Running
-
-### Quick dev run (stdio, debug logging)
-
-```sh
-make run-mcp
-```
-
-### Run as an HTTP/SSE server (debug logging)
-
-```sh
-make run
-```
 
 ### Common flags
 
@@ -90,28 +94,6 @@ Per-command flags:
 ./bin/mimiops-mcp server --namespace default --allow-destructive --port 8080
 ```
 
-### Kubeconfig resolution
-
-Handled by `k8s.io/client-go/tools/clientcmd` (canonical kubectl-compatible behavior):
-
-1. `--kubeconfig` flag (explicit file wins)
-2. `$KUBECONFIG` environment variable (may point to multiple files, which are merged)
-3. `~/.kube/config` fallback
-
-When the config contains multiple contexts, `--context` selects the active one; otherwise the file's `current-context` is used.
-
----
-
-## Verification
-
-```sh
-make build && ./bin/mimiops-mcp version
-```
-
-The `version` subcommand prints the built-in version and commit.
-
----
-
 ## Development
 
 ```sh
@@ -123,17 +105,6 @@ make docs       # (Docker image docs targets are also available; see `make help`
 ```
 
 Use `make help` for a full target list.
-
----
-
-## Architecture
-
-See:
-
-- `docs/1-architect.md` — the original end-to-end architecture (superseded scope).
-- `docs/2-architect-pods-only.md` — the current Stage-1 pods-only design: CLI (`mcp`/`server`/`version`), tool catalog, confirmation flow, output formats, and RBAC.
-
----
 
 ## License
 

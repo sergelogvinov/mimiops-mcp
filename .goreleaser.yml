@@ -32,10 +32,12 @@ dockers_v2:
     images:
       - ghcr.io/sergelogvinov/mimiops-mcp
     tags:
-      - "{{.Version}}"
+      - "v{{.Version}}"
     platforms:
       - linux/amd64
       - linux/arm64
+    labels:
+      io.modelcontextprotocol.server.name: "io.github.sergelogvinov/mimiops-mcp"
     annotations:
       org.opencontainers.image.title: mimiops-mcp
       org.opencontainers.image.description: "Mimi Ops is an opinionated MCP server for Kubernetes"
@@ -66,3 +68,24 @@ signs:
       - "--bundle=${signature}"
       - "${artifact}"
     output: true
+
+mcp:
+  name: io.github.sergelogvinov/mimiops-mcp
+  title: "Mimi Ops mcp server for Kubernetes"
+  description: "Mimi Ops is an opinionated MCP server for Kubernetes"
+  homepage: "{{.GitURL}}"
+  auth:
+    type: github-oidc
+    token: "{{ .Env.GITHUB_TOKEN }}"
+
+  packages:
+    - registry_type: oci
+      identifier: "ghcr.io/sergelogvinov/mimiops-mcp:v{{ .Version }}"
+      transport:
+        type: stdio
+    - registry_type: mcpb
+      identifier: "@sergelogvinov/mimiops-mcp"
+      transport:
+        type: stdio
+
+  disable: true
