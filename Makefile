@@ -55,7 +55,7 @@ build-all-archs:
 
 .PHONY: clean
 clean: ## Clean
-	rm -rf bin .cache
+	rm -rf bin dist .cache .gocache
 
 .PHONY: tools
 tools:
@@ -77,6 +77,10 @@ run-mcp: ## Run mcp
 .PHONY: lint
 lint: ## Lint Code
 	golangci-lint run --config .golangci.yml
+
+.PHONY: vet
+vet: ## Vet Code
+	go vet ./...
 
 .PHONY: unit
 unit: ## Unit Tests

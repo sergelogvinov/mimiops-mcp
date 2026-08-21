@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: mimiops-mcp
+
+dist: bin
+builds:
+  - id: default
+    main: ./cmd/mimiops-mcp
+    binary: bin/mimiops-mcp
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: ["binary"]
+
+dockers_v2:
+  - id: default
+    flags:
+      - --target=release
+    images:
+      - ghcr.io/sergelogvinov/mimiops-mcp
+    tags:
+      - "{{.Version}}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+docker_signs:
+  - id: default
+    cmd: cosign
+    args:
+      - sign
+      - "--yes"
+      - "--bundle=${signature}"
+      - "${artifact}"
+    output: true
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+signs:
+  - artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    cmd: cosign
+    args:
+      - sign-blob
+      - "--yes"
+      - "--bundle=${signature}"
+      - "${artifact}"
+    output: true

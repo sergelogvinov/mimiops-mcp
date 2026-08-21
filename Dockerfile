@@ -27,3 +27,13 @@ ARG TARGETARCH
 COPY --from=builder /src/bin/mimiops-mcp-${TARGETARCH} /bin/mimiops-mcp
 
 ENTRYPOINT ["/bin/mimiops-mcp"]
+
+########################################
+
+FROM --platform=${TARGETARCH} scratch AS release
+
+COPY --from=gcr.io/distroless/static-debian13:nonroot . .
+ARG TARGETPLATFORM
+COPY ${TARGETPLATFORM}/bin/mimiops-mcp /bin/mimiops-mcp
+
+ENTRYPOINT ["/bin/mimiops-mcp"]
