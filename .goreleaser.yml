@@ -22,6 +22,9 @@ builds:
       - amd64
       - arm64
 
+changelog:
+  disable: true
+
 archives:
   - formats: ["binary"]
 
@@ -39,10 +42,13 @@ dockers_v2:
     labels:
       io.modelcontextprotocol.server.name: "io.github.sergelogvinov/mimiops-mcp"
     annotations:
-      org.opencontainers.image.title: mimiops-mcp
       org.opencontainers.image.description: "Mimi Ops is an opinionated MCP server for Kubernetes"
-      org.opencontainers.image.url: "{{.GitURL}}"
       org.opencontainers.image.licenses: "Apache-2.0"
+      org.opencontainers.image.source: "https://github.com/sergelogvinov/mimiops-mcp"
+      org.opencontainers.image.url: "{{.GitURL}}"
+
+docker_digest:
+  name_template: "digest.txt"
 
 docker_signs:
   - id: default
@@ -50,7 +56,6 @@ docker_signs:
     args:
       - sign
       - "--yes"
-      - "--bundle=${signature}"
       - "${artifact}"
     output: true
 
@@ -73,19 +78,21 @@ mcp:
   name: io.github.sergelogvinov/mimiops-mcp
   title: "Mimi Ops mcp server for Kubernetes"
   description: "Mimi Ops is an opinionated MCP server for Kubernetes"
-  homepage: "{{.GitURL}}"
+  homepage: "https://github.com/sergelogvinov/mimiops-mcp"
   auth:
     type: github-oidc
     token: "{{ .Env.GITHUB_TOKEN }}"
-
+  repository:
+    url: "https://github.com/sergelogvinov/mimiops-mcp"
+    source: github
+    id: "1334949924"
+  # https://github.com/goreleaser/goreleaser/discussions/6251
   packages:
     - registry_type: oci
       identifier: "ghcr.io/sergelogvinov/mimiops-mcp:v{{ .Version }}"
       transport:
         type: stdio
-    - registry_type: mcpb
-      identifier: "@sergelogvinov/mimiops-mcp"
-      transport:
-        type: stdio
-
-  disable: true
+    # - registry_type: mcpb
+    #   identifier: "@sergelogvinov/mimiops-mcp"
+    #   transport:
+    #     type: stdio
