@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.1.0...v0.2.0) (2026-08-22)
+
+
+### Features
+
+* add tools subcommand ([d922112](https://github.com/sergelogvinov/mimiops-mcp/commit/d922112778b22a67b1b6da43d7ac4a256be7f278))
+
 ## [0.1.0](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.0.1...v0.1.0) (2026-08-21)
 
 
