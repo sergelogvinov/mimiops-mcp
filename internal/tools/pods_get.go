@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,7 +41,7 @@ type PodGetResult struct {
 }
 
 // RegisterPodsGet adds the pods_get tool, which gets a pod's full spec and status.
-func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterPodsGet(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("pods_get",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -52,7 +52,12 @@ func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[PodGetResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerPodsGet(client))
+}
+
+// handlerPodsGet returns a handler function for the pods_get tool.
+func handlerPodsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -63,6 +68,7 @@ func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "pods_get called",
 			"namespace", namespace,
 			"pod", name,
@@ -78,7 +84,7 @@ func RegisterPodsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 
 		result := buildPodGetResult(ctx, client, pod)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }
 
 // buildPodGetResult builds a PodGetResult from a Pod.

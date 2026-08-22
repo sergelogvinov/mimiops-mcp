@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,7 +34,7 @@ type CronJobsListResult struct {
 }
 
 // RegisterCronJobsList adds the cronjobs_list tool, which lists CronJobs in a namespace (or all namespaces).
-func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("cronjobs_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -44,12 +44,18 @@ func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithOutputSchema[CronJobsListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerCronJobsList(client))
+}
+
+// handlerCronJobsList returns a handler function for the cronjobs_list tool.
+func handlerCronJobsList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_list called", "namespace", namespace)
 
 		// List CronJobs
@@ -77,5 +83,5 @@ func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }

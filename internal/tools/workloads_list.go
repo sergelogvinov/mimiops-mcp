@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -34,19 +34,24 @@ type WorkloadsListResult struct {
 
 // RegisterWorkloadsList adds the workloads_list tool, which lists Deployments,
 // StatefulSets, or DaemonSets in a namespace (or all namespaces).
-func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("workloads_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("List Workloads"),
 		mcp.WithDescription("List Deployments, StatefulSets, or DaemonSets in a namespace (or all namespaces)"),
-		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
+		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
 		mcp.WithOutputSchema[WorkloadsListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerWorkloadsList(client))
+}
+
+// handlerWorkloadsList returns the handler function for the workloads_list tool.
+func handlerWorkloadsList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
@@ -59,6 +64,7 @@ func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 
 		labelSelector := req.GetString("label_selector", "")
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_list called",
 			"namespace", namespace,
 			"kind", kind,
@@ -88,5 +94,5 @@ func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client, log *slog.Lo
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }

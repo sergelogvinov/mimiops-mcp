@@ -18,11 +18,11 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +34,7 @@ type JobLogResult struct {
 }
 
 // RegisterJobsLog adds the jobs_log tool, which fetches logs from a Job's pods.
-func RegisterJobsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterJobsLog(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("jobs_log",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -49,7 +49,12 @@ func RegisterJobsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		mcp.WithBoolean("all_pods", mcp.Description("fetch logs from all owned pods"), mcp.DefaultBool(false)),
 		mcp.WithOutputSchema[JobLogResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerJobsLog(client))
+}
+
+// handlerJobsLog returns a handler function for the jobs_log tool.
+func handlerJobsLog(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -65,6 +70,7 @@ func RegisterJobsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		previous := req.GetBool("previous", false)
 		allPods := req.GetBool("all_pods", false)
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_log called",
 			"namespace", namespace,
 			"job", name,
@@ -128,5 +134,5 @@ func RegisterJobsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		}
 
 		return mcp.NewToolResultStructuredOnly(JobLogResult{Streams: streams}), nil
-	})
+	}
 }

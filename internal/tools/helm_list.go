@@ -18,13 +18,13 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 )
 
 // HelmListResult represents the result of listing Helm releases.
@@ -33,7 +33,7 @@ type HelmListResult struct {
 }
 
 // RegisterHelmList adds the helm_list tool, which lists Helm releases in a namespace.
-func RegisterHelmList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterHelmList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("helm_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -45,8 +45,12 @@ func RegisterHelmList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		mcp.WithString("status_filter", mcp.Description("status filter or empty for all"), mcp.Enum("failed", "deployed", ""), mcp.DefaultString("")),
 		mcp.WithOutputSchema[HelmListResult](),
 	)
+	s.AddTool(tool, handlerHelmList(client))
+}
 
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// handlerHelmList returns a handler function for the helm_list tool.
+func handlerHelmList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
@@ -56,6 +60,7 @@ func RegisterHelmList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		statusFilter := req.GetString("status_filter", "")
 		outputFormat := req.GetString("format", "text")
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "helm_list called",
 			"namespace", namespace,
 			"label_selector", labelSelector,
@@ -86,5 +91,5 @@ func RegisterHelmList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }

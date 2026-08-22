@@ -18,13 +18,13 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +36,7 @@ type LimitRangesListResult struct {
 }
 
 // RegisterLimitRangesList adds the limitranges_list tool, which lists LimitRanges in a namespace (or all namespaces).
-func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("limitranges_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -46,12 +46,18 @@ func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client, log *slog.
 		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithOutputSchema[LimitRangesListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerLimitRangesList(client))
+}
+
+// handlerLimitRangesList returns a handler function for the limitranges_list tool.
+func handlerLimitRangesList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "limitranges_list called", "namespace", namespace)
 
 		// List limit ranges
@@ -84,7 +90,7 @@ func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client, log *slog.
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }
 
 // deriveLimitRangeTypes derives the resource types from spec.limits.

@@ -19,13 +19,13 @@ package tools
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sort"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +37,7 @@ type EventsGetResult struct {
 }
 
 // RegisterEventsGet adds the events_get tool, which gets Kubernetes events from a specific namespace (or all namespaces), sorted by time (warnings first).
-func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterEventsGet(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("events_get",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -49,7 +49,12 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		mcp.WithInteger("limit", mcp.Description("maximum number of events to return"), mcp.DefaultNumber(50)),
 		mcp.WithOutputSchema[EventsGetResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerEventsGet(client))
+}
+
+// handlerEventsGet returns a handler function for the events_get tool.
+func handlerEventsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
@@ -65,6 +70,7 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 			limit = 500
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "events_get called",
 			"namespace", namespace,
 			"field_selector", fieldSelector,
@@ -123,5 +129,5 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }

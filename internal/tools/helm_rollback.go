@@ -18,13 +18,13 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 )
 
 // HelmRollbackResult represents the result of rolling back a Helm release.
@@ -33,7 +33,7 @@ type HelmRollbackResult struct {
 }
 
 // RegisterHelmRollback adds the helm_rollback tool, which rolls back a Helm release to the previous revision.
-func RegisterHelmRollback(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterHelmRollback(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("helm_rollback",
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
@@ -44,8 +44,12 @@ func RegisterHelmRollback(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[HelmRollbackResult](),
 	)
+	s.AddTool(tool, handlerHelmRollback(client))
+}
 
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// handlerHelmRollback returns a handler function for the helm_rollback tool.
+func handlerHelmRollback(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -56,6 +60,7 @@ func RegisterHelmRollback(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "helm_rollback called",
 			"name", name,
 			"namespace", namespace,
@@ -104,5 +109,5 @@ func RegisterHelmRollback(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		}
 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }

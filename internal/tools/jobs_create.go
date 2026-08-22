@@ -19,7 +19,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"maps"
 	"math/rand"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +38,7 @@ type JobsCreateResult struct {
 }
 
 // RegisterJobsCreate adds the jobs_create tool, which creates a one-off Job from a CronJob's job template.
-func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("jobs_create",
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -50,7 +50,12 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		mcp.WithString("job_name", mcp.Description("Job name (optional, default: <cronjob>-manual-<random4>)")),
 		mcp.WithOutputSchema[JobsCreateResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerJobsCreate(client))
+}
+
+// handlerJobsCreate returns a handler function for the jobs_create tool.
+func handlerJobsCreate(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cronjobName := req.GetString("cronjob", "")
 		if cronjobName == "" {
 			return mcp.NewToolResultError("missing required parameter 'cronjob'"), nil
@@ -63,6 +68,7 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 
 		jobName := req.GetString("job_name", "")
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_create called",
 			"cronjob", cronjobName,
 			"namespace", namespace,
@@ -95,7 +101,7 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		}
 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }
 
 // generateJobName generates a job name in the format <cronjob>-manual-<random4>.

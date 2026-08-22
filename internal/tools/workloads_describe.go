@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,7 +44,7 @@ type WorkloadDescribeResult struct {
 // RegisterWorkloadsDescribe adds the workloads_describe tool, which provides
 // a rich structured summary of a workload: replicas, conditions, selector,
 // strategy, update history.
-func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("workloads_describe",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -56,7 +56,12 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client, log *slo
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithOutputSchema[WorkloadDescribeResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerWorkloadsDescribe(client))
+}
+
+// handlerWorkloadsDescribe returns the handler function for the workloads_describe tool.
+func handlerWorkloadsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -72,6 +77,7 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client, log *slo
 			return mcp.NewToolResultErrorf("invalid parameter 'kind': must be one of deployment, statefulset, daemonset"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_describe called",
 			"namespace", namespace,
 			"name", name,
@@ -95,7 +101,7 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client, log *slo
 
 		result := buildWorkloadDescribeResult(ctx, workload, client)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }
 
 // buildWorkloadDescribeResult builds a WorkloadDescribeResult from a workload object.

@@ -19,10 +19,13 @@ limitations under the License.
 package logger
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 )
+
+type loggerNameKey struct{}
 
 // Level is the severity threshold derived from the --log-level flag.
 type Level string
@@ -48,6 +51,20 @@ const (
 type Options struct {
 	Level  Level
 	Format Format
+}
+
+// Inject adds a logger to the context
+func Inject(ctx context.Context, logger *slog.Logger) context.Context {
+	return context.WithValue(ctx, loggerNameKey{}, logger)
+}
+
+// FromContext retrieves the logger from context
+func FromContext(ctx context.Context) *slog.Logger {
+	if logger, ok := ctx.Value(loggerNameKey{}).(*slog.Logger); ok {
+		return logger
+	}
+
+	return slog.Default()
 }
 
 // New builds a slog logger writing to stderr with the configured level and

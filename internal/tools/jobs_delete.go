@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -36,7 +36,7 @@ type JobDeleteResult struct {
 }
 
 // RegisterJobsDelete adds the jobs_delete tool, which deletes a Job.
-func RegisterJobsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterJobsDelete(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("jobs_delete",
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
@@ -48,7 +48,12 @@ func RegisterJobsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		mcp.WithString("propagation_policy", mcp.Description("propagation policy"), mcp.Enum("Background", "Foreground", "Orphan"), mcp.DefaultString("Background")),
 		mcp.WithOutputSchema[JobDeleteResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerJobsDelete(client))
+}
+
+// handlerJobsDelete returns a handler function for the jobs_delete tool.
+func handlerJobsDelete(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -62,6 +67,7 @@ func RegisterJobsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		propagationPolicyStr := req.GetString("propagation_policy", "Background")
 		propagationPolicy := metav1.DeletionPropagation(propagationPolicyStr)
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_delete called",
 			"namespace", namespace,
 			"job", name,
@@ -86,5 +92,5 @@ func RegisterJobsDelete(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		}
 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }

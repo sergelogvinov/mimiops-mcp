@@ -19,12 +19,12 @@ package tools
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -37,7 +37,7 @@ type ScaleResult struct {
 // RegisterWorkloadsScale adds the workloads_scale tool, which scales a Deployment
 // or StatefulSet to a target replica count. This is a mutating tool and requires
 // --allow-destructive flag to be enabled.
-func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("workloads_scale",
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
@@ -51,7 +51,12 @@ func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client, log *slog.L
 		mcp.WithBoolean("confirm", mcp.Description("set to true to confirm the scale operation"), mcp.DefaultBool(false)),
 		mcp.WithOutputSchema[ScaleResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerWorkloadsScale(client))
+}
+
+// handlerWorkloadsScale returns the handler function for the workloads_scale tool.
+func handlerWorkloadsScale(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -74,6 +79,7 @@ func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client, log *slog.L
 
 		confirm := req.GetBool("confirm", false)
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_scale called",
 			"namespace", namespace,
 			"name", name,
@@ -137,5 +143,5 @@ func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client, log *slog.L
 
 		result := ScaleResult{WorkloadSummary: toWorkloadSummary(updatedWorkload)}
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }

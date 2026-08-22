@@ -18,11 +18,11 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -32,7 +32,7 @@ type PodLogResult struct {
 }
 
 // RegisterPodsLog adds the pods_log tool, which fetches pod logs.
-func RegisterPodsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterPodsLog(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("pods_log",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -46,7 +46,12 @@ func RegisterPodsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		mcp.WithBoolean("previous", mcp.Description("return previous terminated container logs"), mcp.DefaultBool(false)),
 		mcp.WithInteger("since_seconds", mcp.Description("only return logs newer than N seconds"), mcp.DefaultNumber(0)),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerPodsLog(client))
+}
+
+// handlerPodsLog returns a handler function for the pods_log tool.
+func handlerPodsLog(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -62,6 +67,7 @@ func RegisterPodsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		previous := req.GetBool("previous", false)
 		sinceSeconds := req.GetInt("since_seconds", 0)
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "pods_log called",
 			"namespace", namespace,
 			"pod", name,
@@ -81,5 +87,5 @@ func RegisterPodsLog(s *server.MCPServer, client *k8s.Client, log *slog.Logger) 
 		}
 
 		return mcp.NewToolResultText(stream.Logs), nil
-	})
+	}
 }

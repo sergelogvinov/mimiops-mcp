@@ -19,19 +19,19 @@ package tools
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
 // RegisterCronJobsResume adds the cronjobs_resume tool, which resumes a suspended CronJob (re-enables future scheduled runs).
-func RegisterCronJobsResume(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterCronJobsResume(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("cronjobs_resume",
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -42,7 +42,12 @@ func RegisterCronJobsResume(s *server.MCPServer, client *k8s.Client, log *slog.L
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[CronJobSummary](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerCronJobsResume(client))
+}
+
+// handlerCronJobsResume returns a handler function for the cronjobs_resume tool.
+func handlerCronJobsResume(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -53,6 +58,7 @@ func RegisterCronJobsResume(s *server.MCPServer, client *k8s.Client, log *slog.L
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_resume called",
 			"namespace", namespace,
 			"cronjob", name,
@@ -91,5 +97,5 @@ func RegisterCronJobsResume(s *server.MCPServer, client *k8s.Client, log *slog.L
 
 		result := toCronJobSummary(updatedCronJob)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }

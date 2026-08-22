@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +39,7 @@ type CronJobGetResult struct {
 }
 
 // RegisterCronJobsGet adds the cronjobs_get tool, which gets a single CronJob's full spec and status.
-func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("cronjobs_get",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -50,7 +50,12 @@ func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logg
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[CronJobGetResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerCronJobsGet(client))
+}
+
+// handlerCronJobsGet returns a handler function for the cronjobs_get tool.
+func handlerCronJobsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -61,6 +66,7 @@ func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logg
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_get called",
 			"namespace", namespace,
 			"cronjob", name,
@@ -76,7 +82,7 @@ func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logg
 
 		result := buildCronJobGetResult(cronJob)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }
 
 // buildCronJobGetResult builds a CronJobGetResult from a CronJob.

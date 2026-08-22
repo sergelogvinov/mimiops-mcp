@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,7 +41,7 @@ type CronJobDescribeResult struct {
 }
 
 // RegisterCronJobsDescribe adds the cronjobs_describe tool, which provides a structured CronJob summary.
-func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("cronjobs_describe",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -52,7 +52,12 @@ func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[CronJobDescribeResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerCronJobsDescribe(client))
+}
+
+// handlerCronJobsDescribe returns a handler function for the cronjobs_describe tool.
+func handlerCronJobsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -63,6 +68,7 @@ func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_describe called",
 			"namespace", namespace,
 			"cronjob", name,
@@ -82,7 +88,7 @@ func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog
 		}
 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }
 
 // buildCronJobDescribeResult builds a CronJobDescribeResult from a CronJob.

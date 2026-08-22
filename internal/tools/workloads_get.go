@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -39,7 +39,7 @@ type WorkloadGetResult struct {
 
 // RegisterWorkloadsGet adds the workloads_get tool, which gets a single workload's
 // full spec and status (Deployment, StatefulSet, or DaemonSet).
-func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("workloads_get",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -51,7 +51,12 @@ func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithOutputSchema[WorkloadGetResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerWorkloadsGet(client))
+}
+
+// handlerWorkloadsGet returns the handler function for the workloads_get tool.
+func handlerWorkloadsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -67,6 +72,7 @@ func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			return mcp.NewToolResultErrorf("invalid parameter 'kind': must be one of deployment, statefulset, daemonset"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_get called",
 			"namespace", namespace,
 			"name", name,
@@ -90,7 +96,7 @@ func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client, log *slog.Log
 
 		result := buildWorkloadGetResult(workload)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }
 
 // buildWorkloadGetResult builds a WorkloadGetResult from a workload object.

@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,7 +34,7 @@ type NodesListResult struct {
 }
 
 // RegisterNodesList adds the nodes_list tool, which lists cluster nodes and their status.
-func RegisterNodesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterNodesList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("nodes_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -43,7 +43,13 @@ func RegisterNodesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		mcp.WithDescription("List cluster nodes and their status"),
 		mcp.WithOutputSchema[NodesListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerNodesList(client))
+}
+
+// handlerNodesList returns a handler function for the nodes_list tool.
+func handlerNodesList(client *k8s.Client) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "nodes_list called")
 
 		// List nodes
@@ -71,5 +77,5 @@ func RegisterNodesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }

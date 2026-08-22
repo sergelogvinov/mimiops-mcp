@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +35,7 @@ type ResourceQuotasListResult struct {
 }
 
 // RegisterResourceQuotasList adds the resourcequotas_list tool, which lists ResourceQuotas in a namespace (or all namespaces).
-func RegisterResourceQuotasList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterResourceQuotasList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("resourcequotas_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -45,12 +45,18 @@ func RegisterResourceQuotasList(s *server.MCPServer, client *k8s.Client, log *sl
 		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithOutputSchema[ResourceQuotasListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerResourceQuotasList(client))
+}
+
+// handlerResourceQuotasList returns a handler function for the resourcequotas_list tool.
+func handlerResourceQuotasList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "resourcequotas_list called", "namespace", namespace)
 
 		// List resource quotas
@@ -92,7 +98,7 @@ func RegisterResourceQuotasList(s *server.MCPServer, client *k8s.Client, log *sl
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }
 
 // getQuotaValueDisplay returns the used/hard display for a resource.

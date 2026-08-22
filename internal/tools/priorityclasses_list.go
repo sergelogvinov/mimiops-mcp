@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,7 +34,7 @@ type PriorityClassesListResult struct {
 }
 
 // RegisterPriorityClassesList adds the priorityclasses_list tool, which lists PriorityClasses in the cluster.
-func RegisterPriorityClassesList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterPriorityClassesList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("priorityclasses_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -43,7 +43,13 @@ func RegisterPriorityClassesList(s *server.MCPServer, client *k8s.Client, log *s
 		mcp.WithDescription("List PriorityClasses in the cluster"),
 		mcp.WithOutputSchema[PriorityClassesListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerPriorityClassesList(client))
+}
+
+// handlerPriorityClassesList returns a handler function for the priorityclasses_list tool.
+func handlerPriorityClassesList(client *k8s.Client) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "priorityclasses_list called")
 
 		// List priority classes
@@ -77,5 +83,5 @@ func RegisterPriorityClassesList(s *server.MCPServer, client *k8s.Client, log *s
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }

@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,7 +34,7 @@ type JobsListResult struct {
 }
 
 // RegisterJobsList adds the jobs_list tool, which lists Jobs in a namespace (or all namespaces).
-func RegisterJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterJobsList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("jobs_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -45,7 +45,12 @@ func RegisterJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
 		mcp.WithOutputSchema[JobsListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerJobsList(client))
+}
+
+// handlerJobsList returns a handler function for the jobs_list tool.
+func handlerJobsList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
@@ -53,6 +58,7 @@ func RegisterJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 
 		labelSelector := req.GetString("label_selector", "")
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_list called",
 			"namespace", namespace,
 			"label_selector", labelSelector,
@@ -82,5 +88,5 @@ func RegisterJobsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }

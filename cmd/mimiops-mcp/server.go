@@ -19,11 +19,13 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"strconv"
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools"
 	"github.com/spf13/cobra"
 )
@@ -92,9 +94,16 @@ func serveSSE(_ context.Context, client *k8s.Client, cfg *config.Config, log *sl
 	}
 
 	srv := server.NewMCPServer("mimiops-mcp", version, opts...)
-	tools.RegisterTools(srv, client, log, cfg.AllowDestructive)
+	tools.RegisterTools(srv, client, cfg.AllowDestructive)
 
-	httpOpts := []server.StreamableHTTPOption{}
+	// Set up HTTP server with context injection for logging
+	// Currently, this is the only way to inject context into the HTTP handler for logging purposes.
+	httpOpts := []server.StreamableHTTPOption{
+		server.WithHTTPContextFunc(func(ctx context.Context, _ *http.Request) context.Context {
+			return logger.Inject(ctx, log)
+		}),
+	}
+
 	httpServer := server.NewStreamableHTTPServer(srv, httpOpts...)
 
 	return httpServer.Start(":" + strconv.Itoa(cfg.Port))

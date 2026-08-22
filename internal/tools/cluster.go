@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 )
 
 // ClusterNameResult represents the result of getting the cluster name.
@@ -35,7 +35,7 @@ type ClusterNameResult struct {
 // cluster resolved from the active kubeconfig context. The value is captured
 // once at startup by k8s.NewClient, so no cluster API call (and therefore no
 // RBAC) is needed at call time.
-func RegisterClusterName(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterClusterName(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("cluster_name",
 		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -46,7 +46,7 @@ func RegisterClusterName(s *server.MCPServer, client *k8s.Client, log *slog.Logg
 		mcp.WithOutputSchema[ClusterNameResult](),
 	)
 	s.AddTool(tool, func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		log.InfoContext(ctx, "cluster_name called", "cluster", client.ClusterName)
+		logger.FromContext(ctx).InfoContext(ctx, "cluster_name called", "cluster", client.ClusterName)
 
 		result := ClusterNameResult{Name: client.ClusterName}
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil

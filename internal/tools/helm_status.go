@@ -18,13 +18,13 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 )
 
 // HelmStatusResult represents the result of getting Helm release status.
@@ -33,7 +33,7 @@ type HelmStatusResult struct {
 }
 
 // RegisterHelmStatus adds the helm_status tool, which gets the status of a Helm release.
-func RegisterHelmStatus(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterHelmStatus(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("helm_status",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -44,8 +44,12 @@ func RegisterHelmStatus(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[HelmStatusResult](),
 	)
+	s.AddTool(tool, handlerHelmStatus(client))
+}
 
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// handlerHelmStatus returns a handler function for the helm_status tool.
+func handlerHelmStatus(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -56,6 +60,7 @@ func RegisterHelmStatus(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "helm_status called",
 			"name", name,
 			"namespace", namespace,
@@ -86,5 +91,5 @@ func RegisterHelmStatus(s *server.MCPServer, client *k8s.Client, log *slog.Logge
 		}
 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }

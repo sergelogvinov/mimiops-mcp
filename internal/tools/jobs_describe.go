@@ -19,12 +19,12 @@ package tools
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,7 +43,7 @@ type JobDescribeResult struct {
 }
 
 // RegisterJobsDescribe adds the jobs_describe tool, which provides a structured Job summary.
-func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("jobs_describe",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -54,7 +54,12 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[JobDescribeResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerJobsDescribe(client))
+}
+
+// handlerJobsDescribe returns a handler function for the jobs_describe tool.
+func handlerJobsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -65,6 +70,7 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_describe called",
 			"namespace", namespace,
 			"job", name,
@@ -84,7 +90,7 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client, log *slog.Log
 		}
 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
-	})
+	}
 }
 
 // buildJobDescribeResult builds a JobDescribeResult from a Job.

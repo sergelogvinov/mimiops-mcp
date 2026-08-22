@@ -18,12 +18,12 @@ package tools
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,7 +34,7 @@ type PodsListResult struct {
 }
 
 // RegisterPodsList adds the pods_list tool, which lists pods in a namespace (or all namespaces).
-func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger) {
+func RegisterPodsList(s *server.MCPServer, client *k8s.Client) {
 	tool := mcp.NewTool("pods_list",
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -46,7 +46,12 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		mcp.WithString("field_selector", mcp.Description("field selector filter")),
 		mcp.WithOutputSchema[PodsListResult](),
 	)
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(tool, handlerPodsList(client))
+}
+
+// handlerPodsList returns a handler function for the pods_list tool.
+func handlerPodsList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Parse parameters
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
@@ -56,6 +61,7 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		labelSelector := req.GetString("label_selector", "")
 		fieldSelector := req.GetString("field_selector", "")
 
+		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "pods_list called",
 			"namespace", namespace,
 			"label_selector", labelSelector,
@@ -87,5 +93,5 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client, log *slog.Logger)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil
-	})
+	}
 }

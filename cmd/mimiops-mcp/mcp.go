@@ -23,6 +23,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools"
 	"github.com/spf13/cobra"
 )
@@ -87,7 +88,9 @@ func serveStdio(_ context.Context, client *k8s.Client, cfg *config.Config, log *
 	}
 
 	srv := server.NewMCPServer("mimiops-mcp", version, opts...)
-	tools.RegisterTools(srv, client, log, cfg.AllowDestructive)
+	tools.RegisterTools(srv, client, cfg.AllowDestructive)
 
-	return server.ServeStdio(srv)
+	return server.ServeStdio(srv, server.WithStdioContextFunc(func(ctx context.Context) context.Context {
+		return logger.Inject(ctx, log)
+	}))
 }
