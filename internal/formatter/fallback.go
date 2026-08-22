@@ -59,7 +59,10 @@ func ToMarkdown(v any) string {
 		formatted := formatValue(f.value, 0)
 		if formatted != "" {
 			buf.WriteString(f.tag)
-			buf.WriteString(": ")
+			buf.WriteString(":")
+			if formatted[0] != '\n' {
+				buf.WriteString(" ")
+			}
 			buf.WriteString(formatted)
 			buf.WriteString("\n\n")
 		}
@@ -285,7 +288,10 @@ func formatStruct(v reflect.Value, depth int) string {
 			buf.WriteString("\n")
 			writeIndent(&buf, depth+1)
 			buf.WriteString(f.tag)
-			buf.WriteString(": ")
+			buf.WriteString(":")
+			if formatted[0] != '\n' {
+				buf.WriteString(" ")
+			}
 			buf.WriteString(formatted)
 			buf.WriteString("\n\n")
 		}
