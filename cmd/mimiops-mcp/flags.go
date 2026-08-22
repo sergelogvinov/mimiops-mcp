@@ -47,6 +47,7 @@ const (
 	defaultLogFormat        = "text"
 	defaultPort             = 8080
 	defaultAllowDestructive = false
+	defaultOutputFormat     = "text"
 )
 
 // Flags wraps genericclioptions.ConfigFlags and adds application-specific flags.
@@ -57,6 +58,7 @@ type Flags struct {
 	LogLevel         string
 	LogFormat        string
 	Port             int
+	Output           string
 }
 
 // DefaultFlags returns the default flags for the command,
@@ -81,6 +83,7 @@ func DefaultFlags() *Flags {
 		LogLevel:         withDefaultEnv(envLogLevel, defaultLogLevel),
 		LogFormat:        withDefaultEnv(envLogFormat, defaultLogFormat),
 		Port:             withDefaultEnvInt(envPort, defaultPort),
+		Output:           defaultOutputFormat,
 	}
 }
 
@@ -98,6 +101,11 @@ func (f *Flags) AddPersistentFlags(flags *pflag.FlagSet) {
 // AddServerFlags adds the flags for the "server" subcommand.
 func (f *Flags) AddServerFlags(flags *pflag.FlagSet) {
 	flags.IntVarP(&f.Port, flagPort, "", f.Port, "http/sse listen port (default: 8080)")
+}
+
+// AddToolFlags adds the flags for the "tool" subcommand.
+func (f *Flags) AddToolFlags(flags *pflag.FlagSet) {
+	flags.StringVarP(&f.Output, "output", "o", defaultOutputFormat, "output format: text, json, yaml")
 }
 
 // Config returns the internal config populated from the parsed flags.

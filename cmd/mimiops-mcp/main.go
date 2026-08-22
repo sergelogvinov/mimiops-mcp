@@ -78,6 +78,7 @@ func newRootCmd() *cobra.Command {
 		newVersionCmd(),
 		newMcpCmd(flags),
 		newServerCmd(flags),
+		newToolsCmd(flags),
 	)
 
 	return rootCmd
