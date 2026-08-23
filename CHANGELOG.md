@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.2.0...v0.2.1) (2026-08-23)
+
+
+### Bug Fixes
+
+* release pipeline ([ef66b2a](https://github.com/sergelogvinov/mimiops-mcp/commit/ef66b2a060b17d559eff0c5c820c9550737881ad))
+
 ## [0.2.0](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.1.0...v0.2.0) (2026-08-23)
 
 
