@@ -41,12 +41,13 @@ archives:
   #     - default
   #   name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
   #   formats:
-  #     - gz
+  #     - tar.gz
   #   format_overrides:
   #     - formats:
   #         - zip
   #       goos: windows
-  #   files: []
+  #   files:
+  #     - LICENSE
 
 homebrew_casks:
   - name: mimiops-mcp
@@ -91,11 +92,15 @@ dockers_v2:
       - ghcr.io/sergelogvinov/mimiops-mcp
     tags:
       - "v{{.Version}}"
+      - "latest"
     platforms:
       - linux/amd64
       - linux/arm64
     labels:
       io.modelcontextprotocol.server.name: "io.github.sergelogvinov/mimiops-mcp"
+      io.artifacthub.package.readme-url: "https://raw.githubusercontent.com/sergelogvinov/mimiops-mcp/main/README.md"
+      io.artifacthub.package.maintainers: '[{"name":"Serge Logvinov","email":"serge.logvinov@sinextra.dev"}]'
+      io.artifacthub.package.license: "Apache-2.0"
     annotations:
       org.opencontainers.image.description: "MimiOps is an opinionated MCP server for Kubernetes"
       org.opencontainers.image.licenses: "Apache-2.0"
