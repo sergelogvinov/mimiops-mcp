@@ -41,8 +41,8 @@ type CronJobDescribeResult struct {
 }
 
 // RegisterCronJobsDescribe adds the cronjobs_describe tool, which provides a structured CronJob summary.
-func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("cronjobs_describe",
+func RegisterCronJobsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -51,13 +51,20 @@ func RegisterCronJobsDescribe(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("CronJob name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[CronJobDescribeResult](),
-	)
-	s.AddTool(tool, handlerCronJobsDescribe(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("cronjobs_describe", opts...)
+	s.AddTool(tool, handlerCronJobsDescribe(mc))
 }
 
 // handlerCronJobsDescribe returns a handler function for the cronjobs_describe tool.
-func handlerCronJobsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerCronJobsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -70,6 +77,7 @@ func handlerCronJobsDescribe(client *k8s.Client) func(ctx context.Context, req m
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_describe called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"cronjob", name,
 		)

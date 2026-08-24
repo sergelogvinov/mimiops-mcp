@@ -33,8 +33,8 @@ type HelmStatusResult struct {
 }
 
 // RegisterHelmStatus adds the helm_status tool, which gets the status of a Helm release.
-func RegisterHelmStatus(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("helm_status",
+func RegisterHelmStatus(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -43,13 +43,20 @@ func RegisterHelmStatus(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("release name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[HelmStatusResult](),
-	)
-	s.AddTool(tool, handlerHelmStatus(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("helm_status", opts...)
+	s.AddTool(tool, handlerHelmStatus(mc))
 }
 
 // handlerHelmStatus returns a handler function for the helm_status tool.
-func handlerHelmStatus(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerHelmStatus(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -62,6 +69,7 @@ func handlerHelmStatus(client *k8s.Client) func(ctx context.Context, req mcp.Cal
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "helm_status called",
+			"cluster", client.ClusterName,
 			"name", name,
 			"namespace", namespace,
 		)

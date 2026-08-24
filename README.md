@@ -23,6 +23,8 @@ The agent can observe, investigate, and perform a limited number of safe recover
 
 This makes Mimi OPS an opinionated interface between AI agents and Kubernetes: powerful enough for common troubleshooting, but limited enough to reduce the risk of unexpected changes.
 
+Keep your AI on the leash.
+
 ### Kubernetes basic tools:
 
 - Pods

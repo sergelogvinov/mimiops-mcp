@@ -43,8 +43,8 @@ type JobDescribeResult struct {
 }
 
 // RegisterJobsDescribe adds the jobs_describe tool, which provides a structured Job summary.
-func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("jobs_describe",
+func RegisterJobsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -53,13 +53,20 @@ func RegisterJobsDescribe(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("Job name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[JobDescribeResult](),
-	)
-	s.AddTool(tool, handlerJobsDescribe(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("jobs_describe", opts...)
+	s.AddTool(tool, handlerJobsDescribe(mc))
 }
 
 // handlerJobsDescribe returns a handler function for the jobs_describe tool.
-func handlerJobsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerJobsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -72,6 +79,7 @@ func handlerJobsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.C
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_describe called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"job", name,
 		)

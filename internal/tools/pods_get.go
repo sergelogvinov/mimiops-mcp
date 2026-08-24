@@ -41,8 +41,8 @@ type PodGetResult struct {
 }
 
 // RegisterPodsGet adds the pods_get tool, which gets a pod's full spec and status.
-func RegisterPodsGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("pods_get",
+func RegisterPodsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -51,13 +51,20 @@ func RegisterPodsGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[PodGetResult](),
-	)
-	s.AddTool(tool, handlerPodsGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("pods_get", opts...)
+	s.AddTool(tool, handlerPodsGet(mc))
 }
 
 // handlerPodsGet returns a handler function for the pods_get tool.
-func handlerPodsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerPodsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -70,6 +77,7 @@ func handlerPodsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallTo
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "pods_get called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"pod", name,
 		)
@@ -90,12 +98,14 @@ func handlerPodsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallTo
 // buildPodGetResult builds a PodGetResult from a Pod.
 func buildPodGetResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodGetResult {
 	result := &PodGetResult{
-		PodSummary:  toPodSummary(ctx, client, pod),
+		PodSummary:  toPodSummary(pod),
 		PodSpec:     toPodSpec(pod),
 		Annotations: extractAnnotations(pod.Annotations),
 		Labels:      extractLabels(pod.Labels),
 		Conditions:  toPodConditionInfo(pod),
 	}
+
+	result.PodSummary.OwnerReferences, _ = ownerReferences(ctx, client, pod) //nolint:errcheck
 
 	return result
 }

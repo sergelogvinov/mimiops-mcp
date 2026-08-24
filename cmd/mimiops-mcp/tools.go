@@ -65,13 +65,13 @@ func newToolsCmd(flags *Flags) *cobra.Command {
 func runTools(ctx context.Context, f *Flags, args []string) error {
 	cfg := f.Config()
 
-	client, err := k8s.NewClient(cfg)
+	mc, err := k8s.NewMultiClusterClient(cfg)
 	if err != nil {
 		return err
 	}
 
 	srv := server.NewMCPServer("mimiops-mcp", version)
-	tools.RegisterTools(srv, client, cfg.AllowDestructive)
+	tools.RegisterTools(srv, mc, cfg.AllowDestructive)
 	toolsMap := srv.ListTools()
 
 	// No arguments: list available tools

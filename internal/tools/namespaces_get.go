@@ -40,8 +40,8 @@ type NamespaceGetResult struct {
 }
 
 // RegisterNamespacesGet adds the namespaces_get tool, which gets a single namespace's full spec and status.
-func RegisterNamespacesGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("namespaces_get",
+func RegisterNamespacesGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -49,20 +49,30 @@ func RegisterNamespacesGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithDescription("Get a namespace full spec and status."),
 		mcp.WithString("name", mcp.Description("namespace name"), mcp.Required()),
 		mcp.WithOutputSchema[NamespaceGetResult](),
-	)
-	s.AddTool(tool, handlerNamespacesGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("namespaces_get", opts...)
+	s.AddTool(tool, handlerNamespacesGet(mc))
 }
 
 // handlerNamespacesGet returns a handler function for the namespaces_get tool.
-func handlerNamespacesGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerNamespacesGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "namespaces_get called", "namespace", name)
+		log.DebugContext(ctx, "namespaces_get called",
+			"cluster", client.ClusterName,
+			"namespace", name,
+		)
 
 		// Get the namespace
 		ns, err := client.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})

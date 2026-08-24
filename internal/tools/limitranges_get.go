@@ -39,8 +39,8 @@ type LimitRangeGetResult struct {
 }
 
 // RegisterLimitRangesGet adds the limitranges_get tool, which gets a single LimitRange's full spec.
-func RegisterLimitRangesGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("limitranges_get",
+func RegisterLimitRangesGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -49,13 +49,20 @@ func RegisterLimitRangesGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("LimitRange name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace name"), mcp.Required()),
 		mcp.WithOutputSchema[LimitRangeGetResult](),
-	)
-	s.AddTool(tool, handlerLimitRangesGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("limitranges_get", opts...)
+	s.AddTool(tool, handlerLimitRangesGet(mc))
 }
 
 // handlerLimitRangesGet returns a handler function for the limitranges_get tool.
-func handlerLimitRangesGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerLimitRangesGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -67,7 +74,11 @@ func handlerLimitRangesGet(client *k8s.Client) func(ctx context.Context, req mcp
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "limitranges_get called", "namespace", namespace, "name", name)
+		log.DebugContext(ctx, "limitranges_get called",
+			"cluster", client.ClusterName,
+			"namespace", namespace,
+			"name", name,
+		)
 
 		// Get the limit range
 		lr, err := client.CoreV1().LimitRanges(namespace).Get(ctx, name, metav1.GetOptions{})

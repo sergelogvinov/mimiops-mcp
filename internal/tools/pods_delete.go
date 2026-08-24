@@ -36,8 +36,8 @@ type PodDeleteResult struct {
 }
 
 // RegisterPodsDelete adds the pods_delete tool, which deletes a pod.
-func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("pods_delete",
+func RegisterPodsDelete(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
@@ -47,13 +47,20 @@ func RegisterPodsDelete(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithInteger("grace_period_seconds", mcp.Description("grace period in seconds"), mcp.DefaultNumber(30)),
 		mcp.WithOutputSchema[PodDeleteResult](),
-	)
-	s.AddTool(tool, handlerPodsDelete(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("pods_delete", opts...)
+	s.AddTool(tool, handlerPodsDelete(mc))
 }
 
 // handlerPodsDelete returns a handler function for the pods_delete tool.
-func handlerPodsDelete(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerPodsDelete(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -68,6 +75,7 @@ func handlerPodsDelete(client *k8s.Client) func(ctx context.Context, req mcp.Cal
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "pods_delete called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"pod", name,
 			"grace_period_seconds", gracePeriodSeconds,
@@ -75,7 +83,7 @@ func handlerPodsDelete(client *k8s.Client) func(ctx context.Context, req mcp.Cal
 
 		// Delete the pod - convert int to int64
 		gracePeriodSecondsInt64 := int64(gracePeriodSeconds)
-		err := client.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{
+		err = client.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{
 			GracePeriodSeconds: &gracePeriodSecondsInt64,
 		})
 		if err != nil {

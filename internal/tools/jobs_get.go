@@ -39,8 +39,8 @@ type JobGetResult struct {
 }
 
 // RegisterJobsGet adds the jobs_get tool, which gets a single Job's full spec and status.
-func RegisterJobsGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("jobs_get",
+func RegisterJobsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -49,13 +49,20 @@ func RegisterJobsGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("Job name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[JobGetResult](),
-	)
-	s.AddTool(tool, handlerJobsGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("jobs_get", opts...)
+	s.AddTool(tool, handlerJobsGet(mc))
 }
 
 // handlerJobsGet returns a handler function for the jobs_get tool.
-func handlerJobsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerJobsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -68,6 +75,7 @@ func handlerJobsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallTo
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_get called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"job", name,
 		)

@@ -92,20 +92,23 @@ dockers_v2:
       - ghcr.io/sergelogvinov/mimiops-mcp
     tags:
       - "v{{.Version}}"
-      - "latest"
+      - "{{ if not .IsNightly }}latest{{ end }}"
     platforms:
       - linux/amd64
       - linux/arm64
     labels:
       io.modelcontextprotocol.server.name: "io.github.sergelogvinov/mimiops-mcp"
       io.artifacthub.package.readme-url: "https://raw.githubusercontent.com/sergelogvinov/mimiops-mcp/main/README.md"
-      io.artifacthub.package.maintainers: '[{"name":"Serge Logvinov","email":"serge.logvinov@sinextra.dev"}]'
       io.artifacthub.package.license: "Apache-2.0"
     annotations:
+      org.opencontainers.image.name: "{{ .ProjectName }}"
       org.opencontainers.image.description: "MimiOps is an opinionated MCP server for Kubernetes"
       org.opencontainers.image.licenses: "Apache-2.0"
       org.opencontainers.image.source: "https://github.com/sergelogvinov/mimiops-mcp"
-      org.opencontainers.image.url: "{{.GitURL}}"
+      org.opencontainers.image.url: "{{ .GitURL }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
 
 docker_digest:
   name_template: "digest.txt"

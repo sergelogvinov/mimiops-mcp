@@ -34,8 +34,8 @@ type JobLogResult struct {
 }
 
 // RegisterJobsLog adds the jobs_log tool, which fetches logs from a Job's pods.
-func RegisterJobsLog(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("jobs_log",
+func RegisterJobsLog(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
@@ -48,13 +48,20 @@ func RegisterJobsLog(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithBoolean("previous", mcp.Description("return previous terminated container logs"), mcp.DefaultBool(false)),
 		mcp.WithBoolean("all_pods", mcp.Description("fetch logs from all owned pods"), mcp.DefaultBool(false)),
 		mcp.WithOutputSchema[JobLogResult](),
-	)
-	s.AddTool(tool, handlerJobsLog(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("jobs_log", opts...)
+	s.AddTool(tool, handlerJobsLog(mc))
 }
 
 // handlerJobsLog returns a handler function for the jobs_log tool.
-func handlerJobsLog(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerJobsLog(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -72,6 +79,7 @@ func handlerJobsLog(client *k8s.Client) func(ctx context.Context, req mcp.CallTo
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_log called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"job", name,
 			"container", container,

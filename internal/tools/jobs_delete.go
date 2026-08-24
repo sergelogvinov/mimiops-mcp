@@ -36,8 +36,8 @@ type JobDeleteResult struct {
 }
 
 // RegisterJobsDelete adds the jobs_delete tool, which deletes a Job.
-func RegisterJobsDelete(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("jobs_delete",
+func RegisterJobsDelete(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
@@ -47,13 +47,20 @@ func RegisterJobsDelete(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("propagation_policy", mcp.Description("propagation policy"), mcp.Enum("Background", "Foreground", "Orphan"), mcp.DefaultString("Background")),
 		mcp.WithOutputSchema[JobDeleteResult](),
-	)
-	s.AddTool(tool, handlerJobsDelete(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("jobs_delete", opts...)
+	s.AddTool(tool, handlerJobsDelete(mc))
 }
 
 // handlerJobsDelete returns a handler function for the jobs_delete tool.
-func handlerJobsDelete(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerJobsDelete(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -69,13 +76,14 @@ func handlerJobsDelete(client *k8s.Client) func(ctx context.Context, req mcp.Cal
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_delete called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"job", name,
 			"propagation_policy", propagationPolicyStr,
 		)
 
 		// Delete the Job
-		err := client.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{
+		err = client.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{
 			PropagationPolicy: &propagationPolicy,
 		})
 		if err != nil {

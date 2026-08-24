@@ -43,8 +43,8 @@ type PodDescribeResult struct {
 }
 
 // RegisterPodsDescribe adds the pods_describe tool, which provides a structured pod summary.
-func RegisterPodsDescribe(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("pods_describe",
+func RegisterPodsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -53,13 +53,20 @@ func RegisterPodsDescribe(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[PodDescribeResult](),
-	)
-	s.AddTool(tool, handlerPodsDescribe(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("pods_describe", opts...)
+	s.AddTool(tool, handlerPodsDescribe(mc))
 }
 
 // handlerPodsDescribe returns a handler function for the pods_describe tool.
-func handlerPodsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerPodsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -72,6 +79,7 @@ func handlerPodsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.C
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "pods_describe called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"pod", name,
 		)
@@ -93,12 +101,14 @@ func handlerPodsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.C
 // buildPodDescribeResult builds a PodDescribeResult from a Pod.
 func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodDescribeResult {
 	result := &PodDescribeResult{
-		PodSummary:  toPodSummary(ctx, client, pod),
+		PodSummary:  toPodSummary(pod),
 		PodSpec:     toPodSpec(pod),
 		Annotations: extractAnnotations(pod.Annotations),
 		Labels:      extractLabels(pod.Labels),
 		Conditions:  toPodConditionInfo(pod),
 	}
+
+	result.PodSummary.OwnerReferences, _ = ownerReferences(ctx, client, pod) //nolint:errcheck
 
 	// List events
 	events, err := client.CoreV1().Events(pod.Namespace).List(ctx, metav1.ListOptions{})

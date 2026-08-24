@@ -18,7 +18,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -37,8 +36,8 @@ type ScaleResult struct {
 // RegisterWorkloadsScale adds the workloads_scale tool, which scales a Deployment
 // or StatefulSet to a target replica count. This is a mutating tool and requires
 // --allow-destructive flag to be enabled.
-func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("workloads_scale",
+func RegisterWorkloadsScale(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
@@ -48,15 +47,21 @@ func RegisterWorkloadsScale(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithInteger("replicas", mcp.Description("target replica count, min: 0"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("kind: deployment or statefulset"), mcp.Required(), mcp.Enum("deployment", "statefulset")),
-		mcp.WithBoolean("confirm", mcp.Description("set to true to confirm the scale operation"), mcp.DefaultBool(false)),
 		mcp.WithOutputSchema[ScaleResult](),
-	)
-	s.AddTool(tool, handlerWorkloadsScale(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("workloads_scale", opts...)
+	s.AddTool(tool, handlerWorkloadsScale(mc))
 }
 
 // handlerWorkloadsScale returns the handler function for the workloads_scale tool.
-func handlerWorkloadsScale(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerWorkloadsScale(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -77,37 +82,14 @@ func handlerWorkloadsScale(client *k8s.Client) func(ctx context.Context, req mcp
 			return mcp.NewToolResultErrorf("invalid parameter 'kind': must be one of deployment, statefulset"), nil
 		}
 
-		confirm := req.GetBool("confirm", false)
-
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_scale called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"name", name,
 			"replicas", replicas,
 			"kind", kind,
-			"confirm", confirm,
 		)
-
-		// Check if destructive operations are allowed
-		// This should be checked at registration time via allowDestructive flag
-		// But we also check here as a safety measure
-
-		// Phase 1: Prompt for confirmation if not confirmed
-		if !confirm {
-			result := ScaleResult{
-				WorkloadSummary: WorkloadSummary{
-					Kind:      kind,
-					Namespace: namespace,
-					Name:      name,
-					Desired:   replicas,
-				},
-			}
-			fallbackText := fmt.Sprintf("This will scale %s '%s' in namespace '%s' to %d replicas. Call again with confirm=true to proceed.", kind, name, namespace, replicas)
-			return mcp.NewToolResultStructured(result, fallbackText), nil
-		}
-
-		// Phase 2: Execute the scale operation
-		var err error
 
 		switch kind {
 		case "deployment":
