@@ -52,8 +52,8 @@ type NodeAllocations struct {
 }
 
 // RegisterNodesGet adds the nodes_get tool, which gets detailed information about a single node.
-func RegisterNodesGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("nodes_get",
+func RegisterNodesGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -61,20 +61,30 @@ func RegisterNodesGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithDescription("Get detailed information about a single node"),
 		mcp.WithString("name", mcp.Description("node name"), mcp.Required()),
 		mcp.WithOutputSchema[NodeGetResult](),
-	)
-	s.AddTool(tool, handlerNodesGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("nodes_get", opts...)
+	s.AddTool(tool, handlerNodesGet(mc))
 }
 
 // handlerNodesGet returns a handler function for the nodes_get tool.
-func handlerNodesGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerNodesGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "nodes_get called", "name", name)
+		log.DebugContext(ctx, "nodes_get called",
+			"cluster", client.ClusterName,
+			"name", name,
+		)
 
 		node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
 		if err != nil {

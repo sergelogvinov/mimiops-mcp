@@ -38,8 +38,8 @@ type JobsCreateResult struct {
 }
 
 // RegisterJobsCreate adds the jobs_create tool, which creates a one-off Job from a CronJob's job template.
-func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("jobs_create",
+func RegisterJobsCreate(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
@@ -49,13 +49,20 @@ func RegisterJobsCreate(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("job_name", mcp.Description("Job name (optional, default: <cronjob>-manual-<random4>)")),
 		mcp.WithOutputSchema[JobsCreateResult](),
-	)
-	s.AddTool(tool, handlerJobsCreate(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("jobs_create", opts...)
+	s.AddTool(tool, handlerJobsCreate(mc))
 }
 
 // handlerJobsCreate returns a handler function for the jobs_create tool.
-func handlerJobsCreate(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerJobsCreate(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		cronjobName := req.GetString("cronjob", "")
 		if cronjobName == "" {
 			return mcp.NewToolResultError("missing required parameter 'cronjob'"), nil
@@ -70,6 +77,7 @@ func handlerJobsCreate(client *k8s.Client) func(ctx context.Context, req mcp.Cal
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "jobs_create called",
+			"cluster", client.ClusterName,
 			"cronjob", cronjobName,
 			"namespace", namespace,
 			"job_name", jobName,

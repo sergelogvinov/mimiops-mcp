@@ -31,8 +31,8 @@ import (
 )
 
 // RegisterCronJobsSuspend adds the cronjobs_suspend tool, which suspends a CronJob (disables future scheduled runs).
-func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("cronjobs_suspend",
+func RegisterCronJobsSuspend(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
@@ -41,13 +41,20 @@ func RegisterCronJobsSuspend(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("CronJob name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[CronJobSummary](),
-	)
-	s.AddTool(tool, handlerCronJobsSuspend(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("cronjobs_suspend", opts...)
+	s.AddTool(tool, handlerCronJobsSuspend(mc))
 }
 
 // handlerCronJobsSuspend returns a handler function for the cronjobs_suspend tool.
-func handlerCronJobsSuspend(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerCronJobsSuspend(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -60,6 +67,7 @@ func handlerCronJobsSuspend(client *k8s.Client) func(ctx context.Context, req mc
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_suspend called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"cronjob", name,
 		)

@@ -32,8 +32,8 @@ type PodLogResult struct {
 }
 
 // RegisterPodsLog adds the pods_log tool, which fetches pod logs.
-func RegisterPodsLog(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("pods_log",
+func RegisterPodsLog(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
@@ -45,13 +45,20 @@ func RegisterPodsLog(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithInteger("tail", mcp.Description("number of lines to show from end of logs"), mcp.DefaultNumber(20)),
 		mcp.WithBoolean("previous", mcp.Description("return previous terminated container logs"), mcp.DefaultBool(false)),
 		mcp.WithInteger("since_seconds", mcp.Description("only return logs newer than N seconds"), mcp.DefaultNumber(0)),
-	)
-	s.AddTool(tool, handlerPodsLog(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("pods_log", opts...)
+	s.AddTool(tool, handlerPodsLog(mc))
 }
 
 // handlerPodsLog returns a handler function for the pods_log tool.
-func handlerPodsLog(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerPodsLog(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -69,6 +76,7 @@ func handlerPodsLog(client *k8s.Client) func(ctx context.Context, req mcp.CallTo
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "pods_log called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"pod", name,
 			"container", container,

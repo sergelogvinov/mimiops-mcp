@@ -34,8 +34,8 @@ type WorkloadsListResult struct {
 
 // RegisterWorkloadsList adds the workloads_list tool, which lists Deployments,
 // StatefulSets, or DaemonSets in a namespace (or all namespaces).
-func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("workloads_list",
+func RegisterWorkloadsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -45,13 +45,20 @@ func RegisterWorkloadsList(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
 		mcp.WithOutputSchema[WorkloadsListResult](),
-	)
-	s.AddTool(tool, handlerWorkloadsList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("workloads_list", opts...)
+	s.AddTool(tool, handlerWorkloadsList(mc))
 }
 
 // handlerWorkloadsList returns the handler function for the workloads_list tool.
-func handlerWorkloadsList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerWorkloadsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
@@ -66,13 +73,13 @@ func handlerWorkloadsList(client *k8s.Client) func(ctx context.Context, req mcp.
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_list called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"kind", kind,
 			"label_selector", labelSelector,
 		)
 
 		var summaries []WorkloadSummary
-		var err error
 
 		if kind != "" {
 			summaries, err = listWorkloadsByKind(ctx, client, namespace, kind, labelSelector)

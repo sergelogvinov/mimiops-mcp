@@ -38,7 +38,7 @@ func newServerCmd(flags *Flags) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := flags.Config()
 
-			client, err := k8s.NewClient(cfg)
+			mc, err := k8s.NewMultiClusterClient(cfg)
 			if err != nil {
 				return err
 			}
@@ -50,7 +50,7 @@ func newServerCmd(flags *Flags) *cobra.Command {
 				return err
 			}
 
-			return serveSSE(cmd.Context(), client, cfg, log)
+			return serveSSE(cmd.Context(), mc, cfg, log)
 		},
 	}
 
@@ -59,31 +59,35 @@ func newServerCmd(flags *Flags) *cobra.Command {
 	return cmd
 }
 
-func serveSSE(_ context.Context, client *k8s.Client, cfg *config.Config, log *slog.Logger) error {
-	versionInfo, err := client.Discovery().ServerVersion()
-	if err != nil {
-		return err
-	}
-
-	log.Info("connected to kubernetes",
-		"version", versionInfo.String(),
-		"context", client.ContextName,
-		"cluster", client.ClusterName,
-		"namespace", client.Namespace,
-		"user", client.User.Name,
+func serveSSE(_ context.Context, mc *k8s.MultiClusterClient, cfg *config.Config, log *slog.Logger) error {
+	log.Info("server config",
+		"allowDestructive", cfg.AllowDestructive,
+		"multiCluster", mc.IsMultiCluster(),
+		"clusters", len(mc.ListClusters()),
 	)
 
-	if client.User.Username != "" {
-		log.Debug("kubeconfig basic-auth username", "username", client.User.Username)
-	}
-	if client.User.HasToken {
-		log.Debug("kubeconfig token auth is in use")
-	}
-	if client.User.Impersonate != "" {
-		log.Info("impersonating",
-			"user", client.User.Impersonate,
-			"groups", client.User.ImpersonateGroups,
+	for _, cluster := range mc.ListClusters() {
+		log.Debug("cluster",
+			"name", cluster.Name,
+			"server", cluster.Server,
+			"default", cluster.IsCurrent,
 		)
+
+		// mcClient, err := mc.GetCluster(cluster.Name)
+		// if err != nil {
+		// 	log.Error("failed to get client for cluster", "cluster", cluster.Name, "error", err)
+		// 	continue
+		// }
+
+		// log.Debug("cluster details",
+		// 	"contexts", cluster.Contexts,
+		// 	"namespace", mcClient.Namespace,
+		// 	"user", mcClient.User.Name,
+		// 	"username", mcClient.User.Username,
+		// 	"impersonate", mcClient.User.Impersonate,
+		// 	"impersonateGroups", mcClient.User.ImpersonateGroups,
+		// 	"hasToken", mcClient.User.HasToken,
+		// )
 	}
 
 	log.Info("serving mcp over http/stream", "port", cfg.Port)
@@ -94,7 +98,7 @@ func serveSSE(_ context.Context, client *k8s.Client, cfg *config.Config, log *sl
 	}
 
 	srv := server.NewMCPServer("mimiops-mcp", version, opts...)
-	tools.RegisterTools(srv, client, cfg.AllowDestructive)
+	tools.RegisterTools(srv, mc, cfg.AllowDestructive)
 
 	// Set up HTTP server with context injection for logging
 	// Currently, this is the only way to inject context into the HTTP handler for logging purposes.

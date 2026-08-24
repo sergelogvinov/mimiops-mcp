@@ -34,21 +34,28 @@ type PriorityClassesListResult struct {
 }
 
 // RegisterPriorityClassesList adds the priorityclasses_list tool, which lists PriorityClasses in the cluster.
-func RegisterPriorityClassesList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("priorityclasses_list",
+func RegisterPriorityClassesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("List PriorityClasses"),
 		mcp.WithDescription("List PriorityClasses in the cluster"),
 		mcp.WithOutputSchema[PriorityClassesListResult](),
-	)
-	s.AddTool(tool, handlerPriorityClassesList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("priorityclasses_list", opts...)
+	s.AddTool(tool, handlerPriorityClassesList(mc))
 }
 
 // handlerPriorityClassesList returns a handler function for the priorityclasses_list tool.
-func handlerPriorityClassesList(client *k8s.Client) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerPriorityClassesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "priorityclasses_list called")
 

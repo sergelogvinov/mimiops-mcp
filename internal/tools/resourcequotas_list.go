@@ -35,8 +35,8 @@ type ResourceQuotasListResult struct {
 }
 
 // RegisterResourceQuotasList adds the resourcequotas_list tool, which lists ResourceQuotas in a namespace (or all namespaces).
-func RegisterResourceQuotasList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("resourcequotas_list",
+func RegisterResourceQuotasList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -44,20 +44,30 @@ func RegisterResourceQuotasList(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithDescription("List ResourceQuotas in a namespace (or all namespaces)."),
 		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithOutputSchema[ResourceQuotasListResult](),
-	)
-	s.AddTool(tool, handlerResourceQuotasList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("resourcequotas_list", opts...)
+	s.AddTool(tool, handlerResourceQuotasList(mc))
 }
 
 // handlerResourceQuotasList returns a handler function for the resourcequotas_list tool.
-func handlerResourceQuotasList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerResourceQuotasList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "resourcequotas_list called", "namespace", namespace)
+		log.DebugContext(ctx, "resourcequotas_list called",
+			"cluster", client.ClusterName,
+			"namespace", namespace,
+		)
 
 		// List resource quotas
 		quotas, err := client.CoreV1().ResourceQuotas(namespace).List(ctx, metav1.ListOptions{})

@@ -36,7 +36,7 @@ func newMcpCmd(flags *Flags) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := flags.Config()
 
-			client, err := k8s.NewClient(cfg)
+			mc, err := k8s.NewMultiClusterClient(cfg)
 			if err != nil {
 				return err
 			}
@@ -48,35 +48,23 @@ func newMcpCmd(flags *Flags) *cobra.Command {
 				return err
 			}
 
-			return serveStdio(cmd.Context(), client, cfg, log)
+			return serveStdio(cmd.Context(), mc, cfg, log)
 		},
 	}
 }
 
-func serveStdio(_ context.Context, client *k8s.Client, cfg *config.Config, log *slog.Logger) error {
-	versionInfo, err := client.Discovery().ServerVersion()
-	if err != nil {
-		return err
-	}
-
-	log.Info("connected to kubernetes",
-		"version", versionInfo.String(),
-		"context", client.ContextName,
-		"cluster", client.ClusterName,
-		"namespace", client.Namespace,
-		"user", client.User.Name,
+func serveStdio(_ context.Context, mc *k8s.MultiClusterClient, cfg *config.Config, log *slog.Logger) error {
+	log.Info("server config",
+		"allowDestructive", cfg.AllowDestructive,
+		"multiCluster", mc.IsMultiCluster(),
+		"clusters", len(mc.ListClusters()),
 	)
 
-	if client.User.Username != "" {
-		log.Debug("kubeconfig basic-auth username", "username", client.User.Username)
-	}
-	if client.User.HasToken {
-		log.Debug("kubeconfig token auth is in use")
-	}
-	if client.User.Impersonate != "" {
-		log.Info("impersonating",
-			"user", client.User.Impersonate,
-			"groups", client.User.ImpersonateGroups,
+	for _, cluster := range mc.ListClusters() {
+		log.Debug("cluster",
+			"name", cluster.Name,
+			"server", cluster.Server,
+			"default", cluster.IsCurrent,
 		)
 	}
 
@@ -88,7 +76,7 @@ func serveStdio(_ context.Context, client *k8s.Client, cfg *config.Config, log *
 	}
 
 	srv := server.NewMCPServer("mimiops-mcp", version, opts...)
-	tools.RegisterTools(srv, client, cfg.AllowDestructive)
+	tools.RegisterTools(srv, mc, cfg.AllowDestructive)
 
 	return server.ServeStdio(srv, server.WithStdioContextFunc(func(ctx context.Context) context.Context {
 		return logger.Inject(ctx, log)

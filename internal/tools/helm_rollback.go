@@ -33,8 +33,8 @@ type HelmRollbackResult struct {
 }
 
 // RegisterHelmRollback adds the helm_rollback tool, which rolls back a Helm release to the previous revision.
-func RegisterHelmRollback(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("helm_rollback",
+func RegisterHelmRollback(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
@@ -43,13 +43,20 @@ func RegisterHelmRollback(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("release name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[HelmRollbackResult](),
-	)
-	s.AddTool(tool, handlerHelmRollback(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("helm_rollback", opts...)
+	s.AddTool(tool, handlerHelmRollback(mc))
 }
 
 // handlerHelmRollback returns a handler function for the helm_rollback tool.
-func handlerHelmRollback(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerHelmRollback(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -62,6 +69,7 @@ func handlerHelmRollback(client *k8s.Client) func(ctx context.Context, req mcp.C
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "helm_rollback called",
+			"cluster", client.ClusterName,
 			"name", name,
 			"namespace", namespace,
 		)

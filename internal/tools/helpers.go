@@ -58,6 +58,20 @@ func ownerReferences(ctx context.Context, client kubernetes.Interface, pod *core
 	return refs, nil
 }
 
+func ownerReferencesParent(pod *corev1.Pod) []OwnerReference {
+	refs := make([]OwnerReference, 0, len(pod.OwnerReferences))
+	for _, ref := range pod.OwnerReferences {
+		ownerRef := OwnerReference{
+			APIVersion: ref.APIVersion,
+			Kind:       ref.Kind,
+			Name:       ref.Name,
+		}
+
+		refs = append(refs, ownerRef)
+	}
+	return refs
+}
+
 // ownerReferencesFromMetav1 converts metav1.OwnerReference to OwnerReference.
 func ownerReferencesFromMetav1(refs []metav1.OwnerReference) []OwnerReference {
 	result := make([]OwnerReference, 0, len(refs))

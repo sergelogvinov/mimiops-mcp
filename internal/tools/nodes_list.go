@@ -34,21 +34,28 @@ type NodesListResult struct {
 }
 
 // RegisterNodesList adds the nodes_list tool, which lists cluster nodes and their status.
-func RegisterNodesList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("nodes_list",
+func RegisterNodesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("List Nodes"),
 		mcp.WithDescription("List cluster nodes and their status"),
 		mcp.WithOutputSchema[NodesListResult](),
-	)
-	s.AddTool(tool, handlerNodesList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("nodes_list", opts...)
+	s.AddTool(tool, handlerNodesList(mc))
 }
 
 // handlerNodesList returns a handler function for the nodes_list tool.
-func handlerNodesList(client *k8s.Client) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerNodesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "nodes_list called")
 

@@ -44,8 +44,8 @@ type WorkloadDescribeResult struct {
 // RegisterWorkloadsDescribe adds the workloads_describe tool, which provides
 // a rich structured summary of a workload: replicas, conditions, selector,
 // strategy, update history.
-func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("workloads_describe",
+func RegisterWorkloadsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -55,13 +55,20 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithOutputSchema[WorkloadDescribeResult](),
-	)
-	s.AddTool(tool, handlerWorkloadsDescribe(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("workloads_describe", opts...)
+	s.AddTool(tool, handlerWorkloadsDescribe(mc))
 }
 
 // handlerWorkloadsDescribe returns the handler function for the workloads_describe tool.
-func handlerWorkloadsDescribe(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerWorkloadsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -79,6 +86,7 @@ func handlerWorkloadsDescribe(client *k8s.Client) func(ctx context.Context, req 
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_describe called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"name", name,
 			"kind", kind,

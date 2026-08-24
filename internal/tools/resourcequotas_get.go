@@ -39,8 +39,8 @@ type ResourceQuotaGetResult struct {
 }
 
 // RegisterResourceQuotasGet adds the resourcequotas_get tool, which gets a single ResourceQuota's full spec and status.
-func RegisterResourceQuotasGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("resourcequotas_get",
+func RegisterResourceQuotasGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -49,13 +49,20 @@ func RegisterResourceQuotasGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("resource quota name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[ResourceQuotaGetResult](),
-	)
-	s.AddTool(tool, handlerResourceQuotasGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("resourcequotas_get", opts...)
+	s.AddTool(tool, handlerResourceQuotasGet(mc))
 }
 
 // handlerResourceQuotasGet returns a handler function for the resourcequotas_get tool.
-func handlerResourceQuotasGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerResourceQuotasGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -67,7 +74,11 @@ func handlerResourceQuotasGet(client *k8s.Client) func(ctx context.Context, req 
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "resourcequotas_get called", "namespace", namespace, "name", name)
+		log.DebugContext(ctx, "resourcequotas_get called",
+			"cluster", client.ClusterName,
+			"namespace", namespace,
+			"name", name,
+		)
 
 		// Get the resource quota
 		quota, err := client.CoreV1().ResourceQuotas(namespace).Get(ctx, name, metav1.GetOptions{})

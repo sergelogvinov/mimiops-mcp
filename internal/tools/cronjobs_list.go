@@ -34,8 +34,8 @@ type CronJobsListResult struct {
 }
 
 // RegisterCronJobsList adds the cronjobs_list tool, which lists CronJobs in a namespace (or all namespaces).
-func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("cronjobs_list",
+func RegisterCronJobsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -43,20 +43,30 @@ func RegisterCronJobsList(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithDescription("List CronJobs in a namespace (or all namespaces)"),
 		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithOutputSchema[CronJobsListResult](),
-	)
-	s.AddTool(tool, handlerCronJobsList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("cronjobs_list", opts...)
+	s.AddTool(tool, handlerCronJobsList(mc))
 }
 
 // handlerCronJobsList returns a handler function for the cronjobs_list tool.
-func handlerCronJobsList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerCronJobsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "cronjobs_list called", "namespace", namespace)
+		log.DebugContext(ctx, "cronjobs_list called",
+			"cluster", client.ClusterName,
+			"namespace", namespace,
+		)
 
 		// List CronJobs
 		cronJobs, err := client.BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})

@@ -37,8 +37,8 @@ type EventsGetResult struct {
 }
 
 // RegisterEventsGet adds the events_get tool, which gets Kubernetes events from a specific namespace (or all namespaces), sorted by time (warnings first).
-func RegisterEventsGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("events_get",
+func RegisterEventsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -48,13 +48,20 @@ func RegisterEventsGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("field_selector", mcp.Description("field selector filter, e.g., 'type==Warning'"), mcp.DefaultString("type==Warning")),
 		mcp.WithInteger("limit", mcp.Description("maximum number of events to return"), mcp.DefaultNumber(50)),
 		mcp.WithOutputSchema[EventsGetResult](),
-	)
-	s.AddTool(tool, handlerEventsGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("events_get", opts...)
+	s.AddTool(tool, handlerEventsGet(mc))
 }
 
 // handlerEventsGet returns a handler function for the events_get tool.
-func handlerEventsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerEventsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
@@ -72,6 +79,7 @@ func handlerEventsGet(client *k8s.Client) func(ctx context.Context, req mcp.Call
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "events_get called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"field_selector", fieldSelector,
 			"limit", limit,

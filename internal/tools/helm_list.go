@@ -33,8 +33,8 @@ type HelmListResult struct {
 }
 
 // RegisterHelmList adds the helm_list tool, which lists Helm releases in a namespace.
-func RegisterHelmList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("helm_list",
+func RegisterHelmList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -44,13 +44,20 @@ func RegisterHelmList(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
 		mcp.WithString("status_filter", mcp.Description("status filter or empty for all"), mcp.Enum("failed", "deployed", ""), mcp.DefaultString("")),
 		mcp.WithOutputSchema[HelmListResult](),
-	)
-	s.AddTool(tool, handlerHelmList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("helm_list", opts...)
+	s.AddTool(tool, handlerHelmList(mc))
 }
 
 // handlerHelmList returns a handler function for the helm_list tool.
-func handlerHelmList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerHelmList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
@@ -62,6 +69,7 @@ func handlerHelmList(client *k8s.Client) func(ctx context.Context, req mcp.CallT
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "helm_list called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"label_selector", labelSelector,
 			"status_filter", statusFilter,

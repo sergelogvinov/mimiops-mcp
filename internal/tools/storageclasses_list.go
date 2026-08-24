@@ -34,21 +34,28 @@ type StorageClassesListResult struct {
 }
 
 // RegisterStorageClassesList adds the storageclasses_list tool, which lists StorageClasses in the cluster.
-func RegisterStorageClassesList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("storageclasses_list",
+func RegisterStorageClassesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("List StorageClasses"),
 		mcp.WithDescription("List StorageClasses in the cluster"),
 		mcp.WithOutputSchema[StorageClassesListResult](),
-	)
-	s.AddTool(tool, handlerStorageClassesList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("storageclasses_list", opts...)
+	s.AddTool(tool, handlerStorageClassesList(mc))
 }
 
 // handlerStorageClassesList returns a handler function for the storageclasses_list tool.
-func handlerStorageClassesList(client *k8s.Client) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerStorageClassesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "storageclasses_list called")
 

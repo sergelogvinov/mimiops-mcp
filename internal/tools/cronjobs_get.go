@@ -39,8 +39,8 @@ type CronJobGetResult struct {
 }
 
 // RegisterCronJobsGet adds the cronjobs_get tool, which gets a single CronJob's full spec and status.
-func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("cronjobs_get",
+func RegisterCronJobsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -49,13 +49,20 @@ func RegisterCronJobsGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("name", mcp.Description("CronJob name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[CronJobGetResult](),
-	)
-	s.AddTool(tool, handlerCronJobsGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("cronjobs_get", opts...)
+	s.AddTool(tool, handlerCronJobsGet(mc))
 }
 
 // handlerCronJobsGet returns a handler function for the cronjobs_get tool.
-func handlerCronJobsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerCronJobsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -68,6 +75,7 @@ func handlerCronJobsGet(client *k8s.Client) func(ctx context.Context, req mcp.Ca
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_get called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"cronjob", name,
 		)

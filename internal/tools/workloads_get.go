@@ -39,8 +39,8 @@ type WorkloadGetResult struct {
 
 // RegisterWorkloadsGet adds the workloads_get tool, which gets a single workload's
 // full spec and status (Deployment, StatefulSet, or DaemonSet).
-func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("workloads_get",
+func RegisterWorkloadsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -50,13 +50,20 @@ func RegisterWorkloadsGet(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithOutputSchema[WorkloadGetResult](),
-	)
-	s.AddTool(tool, handlerWorkloadsGet(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("workloads_get", opts...)
+	s.AddTool(tool, handlerWorkloadsGet(mc))
 }
 
 // handlerWorkloadsGet returns the handler function for the workloads_get tool.
-func handlerWorkloadsGet(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerWorkloadsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		name := req.GetString("name", "")
 		if name == "" {
 			return mcp.NewToolResultError("missing required parameter 'name'"), nil
@@ -74,6 +81,7 @@ func handlerWorkloadsGet(client *k8s.Client) func(ctx context.Context, req mcp.C
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_get called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"name", name,
 			"kind", kind,

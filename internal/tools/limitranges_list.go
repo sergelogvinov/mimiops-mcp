@@ -36,8 +36,8 @@ type LimitRangesListResult struct {
 }
 
 // RegisterLimitRangesList adds the limitranges_list tool, which lists LimitRanges in a namespace (or all namespaces).
-func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("limitranges_list",
+func RegisterLimitRangesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -45,20 +45,30 @@ func RegisterLimitRangesList(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithDescription("List LimitRanges in a namespace (or all namespaces)."),
 		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithOutputSchema[LimitRangesListResult](),
-	)
-	s.AddTool(tool, handlerLimitRangesList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("limitranges_list", opts...)
+	s.AddTool(tool, handlerLimitRangesList(mc))
 }
 
 // handlerLimitRangesList returns a handler function for the limitranges_list tool.
-func handlerLimitRangesList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerLimitRangesList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
 			namespace = metav1.NamespaceAll
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "limitranges_list called", "namespace", namespace)
+		log.DebugContext(ctx, "limitranges_list called",
+			"cluster", client.ClusterName,
+			"namespace", namespace,
+		)
 
 		// List limit ranges
 		ranges, err := client.CoreV1().LimitRanges(namespace).List(ctx, metav1.ListOptions{})

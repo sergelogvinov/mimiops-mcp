@@ -34,8 +34,8 @@ type PodsListResult struct {
 }
 
 // RegisterPodsList adds the pods_list tool, which lists pods in a namespace (or all namespaces).
-func RegisterPodsList(s *server.MCPServer, client *k8s.Client) {
-	tool := mcp.NewTool("pods_list",
+func RegisterPodsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -45,13 +45,20 @@ func RegisterPodsList(s *server.MCPServer, client *k8s.Client) {
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
 		mcp.WithString("field_selector", mcp.Description("field selector filter")),
 		mcp.WithOutputSchema[PodsListResult](),
-	)
-	s.AddTool(tool, handlerPodsList(client))
+	}, clusterOptions(mc)...)
+
+	tool := mcp.NewTool("pods_list", opts...)
+	s.AddTool(tool, handlerPodsList(mc))
 }
 
 // handlerPodsList returns a handler function for the pods_list tool.
-func handlerPodsList(client *k8s.Client) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handlerPodsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := resolveCluster(mc, req)
+		if err != nil {
+			return mcp.NewToolResultErrorf("%v", err), nil
+		}
+
 		// Parse parameters
 		namespace := req.GetString("namespace", "")
 		if namespace == "" {
@@ -63,6 +70,7 @@ func handlerPodsList(client *k8s.Client) func(ctx context.Context, req mcp.CallT
 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "pods_list called",
+			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"label_selector", labelSelector,
 			"field_selector", fieldSelector,
@@ -83,7 +91,7 @@ func handlerPodsList(client *k8s.Client) func(ctx context.Context, req mcp.CallT
 
 		// Build result
 		for _, pod := range pods.Items {
-			result.Pods = append(result.Pods, toPodSummary(ctx, client, &pod))
+			result.Pods = append(result.Pods, toPodSummary(&pod))
 		}
 
 		// Build fallback text
