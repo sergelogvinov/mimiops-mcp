@@ -41,6 +41,9 @@ Keep your AI on the leash.
   - list — list workloads and their current status.
   - get — get information about a specific workload.
   - describe — inspect replicas, rollout status, conditions, and related events.
+- Services
+  - list — list services
+  - describe — inspect status, events, and related resources.
 
 ### Helm integration
 
