@@ -24,6 +24,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -47,7 +48,7 @@ func RegisterJobsDelete(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("propagation_policy", mcp.Description("propagation policy"), mcp.Enum("Background", "Foreground", "Orphan"), mcp.DefaultString("Background")),
 		mcp.WithOutputSchema[JobDeleteResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("jobs_delete", opts...)
 	s.AddTool(tool, handlerJobsDelete(mc))
@@ -56,7 +57,7 @@ func RegisterJobsDelete(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerJobsDelete returns a handler function for the jobs_delete tool.
 func handlerJobsDelete(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

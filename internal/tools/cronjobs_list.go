@@ -24,6 +24,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -43,7 +44,7 @@ func RegisterCronJobsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDescription("List CronJobs in a namespace (or all namespaces)"),
 		mcp.WithString("namespace", mcp.Description("namespace; leave empty for all namespaces")),
 		mcp.WithOutputSchema[CronJobsListResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("cronjobs_list", opts...)
 	s.AddTool(tool, handlerCronJobsList(mc))
@@ -52,7 +53,7 @@ func RegisterCronJobsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerCronJobsList returns a handler function for the cronjobs_list tool.
 func handlerCronJobsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

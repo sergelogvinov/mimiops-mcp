@@ -27,6 +27,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 )
 
 // ClustersDescribeResult represents the result of describing a cluster.
@@ -48,7 +49,7 @@ func RegisterClustersDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithToolTitle("Describe Cluster"),
 		mcp.WithDescription("Return the API versions served by a cluster"),
 		mcp.WithOutputSchema[ClustersDescribeResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("clusters_describe", opts...)
 	s.AddTool(tool, handlerClustersDescribe(mc))
@@ -59,7 +60,7 @@ func handlerClustersDescribe(mc *k8s.MultiClusterClient) func(ctx context.Contex
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		log := logger.FromContext(ctx)
 
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

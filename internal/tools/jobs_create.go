@@ -27,6 +27,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +50,7 @@ func RegisterJobsCreate(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("job_name", mcp.Description("Job name (optional, default: <cronjob>-manual-<random4>)")),
 		mcp.WithOutputSchema[JobsCreateResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("jobs_create", opts...)
 	s.AddTool(tool, handlerJobsCreate(mc))
@@ -58,7 +59,7 @@ func RegisterJobsCreate(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerJobsCreate returns a handler function for the jobs_create tool.
 func handlerJobsCreate(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

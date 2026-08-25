@@ -24,6 +24,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -42,7 +43,7 @@ func RegisterPriorityClassesList(s *server.MCPServer, mc *k8s.MultiClusterClient
 		mcp.WithToolTitle("List PriorityClasses"),
 		mcp.WithDescription("List PriorityClasses in the cluster"),
 		mcp.WithOutputSchema[PriorityClassesListResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("priorityclasses_list", opts...)
 	s.AddTool(tool, handlerPriorityClassesList(mc))
@@ -51,7 +52,7 @@ func RegisterPriorityClassesList(s *server.MCPServer, mc *k8s.MultiClusterClient
 // handlerPriorityClassesList returns a handler function for the priorityclasses_list tool.
 func handlerPriorityClassesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

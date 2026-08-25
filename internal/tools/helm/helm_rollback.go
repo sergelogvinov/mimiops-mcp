@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tools
+package toolshelm
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 )
 
 // HelmRollbackResult represents the result of rolling back a Helm release.
@@ -43,7 +44,7 @@ func RegisterHelmRollback(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithString("name", mcp.Description("release name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[HelmRollbackResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("helm_rollback", opts...)
 	s.AddTool(tool, handlerHelmRollback(mc))
@@ -52,7 +53,7 @@ func RegisterHelmRollback(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerHelmRollback returns a handler function for the helm_rollback tool.
 func handlerHelmRollback(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

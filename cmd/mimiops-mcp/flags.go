@@ -26,11 +26,13 @@ import (
 )
 
 const (
+	flagExtensions       = "extensions"
 	flagAllowDestructive = "allow-destructive"
 	flagLogLevel         = "log-level"
 	flagLogFormat        = "log-format"
 	flagPort             = "port"
 
+	envExtensions       = "EXTENSIONS"
 	envAllowDestructive = "ALLOW_DESTRUCTIVE"
 	envLogLevel         = "LOG_LEVEL"
 	envLogFormat        = "LOG_FORMAT"
@@ -43,10 +45,11 @@ const (
 )
 
 const (
+	defaultExtensions       = "all"
+	defaultAllowDestructive = false
 	defaultLogLevel         = "info"
 	defaultLogFormat        = "text"
 	defaultPort             = 8080
-	defaultAllowDestructive = false
 	defaultOutputFormat     = "text"
 )
 
@@ -54,6 +57,7 @@ const (
 type Flags struct {
 	configFlags *genericclioptions.ConfigFlags
 
+	Extensions       string
 	AllowDestructive bool
 	LogLevel         string
 	LogFormat        string
@@ -79,6 +83,7 @@ func DefaultFlags() *Flags {
 
 	return &Flags{
 		configFlags:      configFlags,
+		Extensions:       withDefaultEnv(envExtensions, defaultExtensions),
 		AllowDestructive: withDefaultEnvBool(envAllowDestructive, defaultAllowDestructive),
 		LogLevel:         withDefaultEnv(envLogLevel, defaultLogLevel),
 		LogFormat:        withDefaultEnv(envLogFormat, defaultLogFormat),
@@ -93,6 +98,7 @@ func (f *Flags) AddPersistentFlags(flags *pflag.FlagSet) {
 	f.configFlags.AddFlags(flags)
 
 	// Add application-specific flags
+	flags.StringVarP(&f.Extensions, flagExtensions, "", f.Extensions, "comma-separated list of extensions to enable, or 'all' (default: all)")
 	flags.BoolVarP(&f.AllowDestructive, flagAllowDestructive, "", f.AllowDestructive, "allow destructive operations (default: false)")
 	flags.StringVarP(&f.LogLevel, flagLogLevel, "", f.LogLevel, "log level: debug, info, warn, error (default: info)")
 	flags.StringVarP(&f.LogFormat, flagLogFormat, "", f.LogFormat, "log output format: text, json (default: text)")
@@ -113,6 +119,7 @@ func (f *Flags) Config() *config.Config {
 	return &config.Config{
 		ConfigFlags:      f.configFlags,
 		Port:             f.Port,
+		Extensions:       f.Extensions,
 		AllowDestructive: f.AllowDestructive,
 		LogLevel:         f.LogLevel,
 		LogFormat:        f.LogFormat,

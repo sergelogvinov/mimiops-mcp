@@ -98,7 +98,9 @@ func serveSSE(_ context.Context, mc *k8s.MultiClusterClient, cfg *config.Config,
 	}
 
 	srv := server.NewMCPServer("mimiops-mcp", version, opts...)
-	tools.RegisterTools(srv, mc, cfg.AllowDestructive)
+	if err := tools.RegisterTools(srv, mc, cfg.Extensions, cfg.AllowDestructive); err != nil {
+		return err
+	}
 
 	// Set up HTTP server with context injection for logging
 	// Currently, this is the only way to inject context into the HTTP handler for logging purposes.

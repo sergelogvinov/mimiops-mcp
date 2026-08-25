@@ -24,6 +24,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -48,7 +49,7 @@ func RegisterWorkloadsScale(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithInteger("replicas", mcp.Description("target replica count, min: 0"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("kind: deployment or statefulset"), mcp.Required(), mcp.Enum("deployment", "statefulset")),
 		mcp.WithOutputSchema[ScaleResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("workloads_scale", opts...)
 	s.AddTool(tool, handlerWorkloadsScale(mc))
@@ -57,7 +58,7 @@ func RegisterWorkloadsScale(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerWorkloadsScale returns the handler function for the workloads_scale tool.
 func handlerWorkloadsScale(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

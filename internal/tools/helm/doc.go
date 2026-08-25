@@ -14,17 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package config defines the configuration structure for the mimiops-mcp server.
-package config
-
-import "k8s.io/cli-runtime/pkg/genericclioptions"
-
-// Config holds the configuration for the mimiops-mcp server.
-type Config struct {
-	ConfigFlags      *genericclioptions.ConfigFlags
-	Port             int
-	Extensions       string
-	AllowDestructive bool
-	LogLevel         string
-	LogFormat        string
-}
+// Package toolshelm provides tools for managing Helm releases in Kubernetes clusters.
+package toolshelm
