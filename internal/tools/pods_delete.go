@@ -24,6 +24,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -47,7 +48,7 @@ func RegisterPodsDelete(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithInteger("grace_period_seconds", mcp.Description("grace period in seconds"), mcp.DefaultNumber(30)),
 		mcp.WithOutputSchema[PodDeleteResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("pods_delete", opts...)
 	s.AddTool(tool, handlerPodsDelete(mc))
@@ -56,7 +57,7 @@ func RegisterPodsDelete(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerPodsDelete returns a handler function for the pods_delete tool.
 func handlerPodsDelete(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

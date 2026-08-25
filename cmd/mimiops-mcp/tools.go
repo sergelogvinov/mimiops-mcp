@@ -71,7 +71,9 @@ func runTools(ctx context.Context, f *Flags, args []string) error {
 	}
 
 	srv := server.NewMCPServer("mimiops-mcp", version)
-	tools.RegisterTools(srv, mc, cfg.AllowDestructive)
+	if err := tools.RegisterTools(srv, mc, cfg.Extensions, cfg.AllowDestructive); err != nil {
+		return err
+	}
 	toolsMap := srv.ListTools()
 
 	// No arguments: list available tools

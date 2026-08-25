@@ -76,7 +76,9 @@ func serveStdio(_ context.Context, mc *k8s.MultiClusterClient, cfg *config.Confi
 	}
 
 	srv := server.NewMCPServer("mimiops-mcp", version, opts...)
-	tools.RegisterTools(srv, mc, cfg.AllowDestructive)
+	if err := tools.RegisterTools(srv, mc, cfg.Extensions, cfg.AllowDestructive); err != nil {
+		return err
+	}
 
 	return server.ServeStdio(srv, server.WithStdioContextFunc(func(ctx context.Context) context.Context {
 		return logger.Inject(ctx, log)

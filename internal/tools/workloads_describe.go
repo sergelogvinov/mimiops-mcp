@@ -24,6 +24,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,7 +56,7 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) 
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithOutputSchema[WorkloadDescribeResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("workloads_describe", opts...)
 	s.AddTool(tool, handlerWorkloadsDescribe(mc))
@@ -64,7 +65,7 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) 
 // handlerWorkloadsDescribe returns the handler function for the workloads_describe tool.
 func handlerWorkloadsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

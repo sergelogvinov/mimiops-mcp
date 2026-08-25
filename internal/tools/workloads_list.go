@@ -24,6 +24,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -45,7 +46,7 @@ func RegisterWorkloadsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
 		mcp.WithOutputSchema[WorkloadsListResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("workloads_list", opts...)
 	s.AddTool(tool, handlerWorkloadsList(mc))
@@ -54,7 +55,7 @@ func RegisterWorkloadsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerWorkloadsList returns the handler function for the workloads_list tool.
 func handlerWorkloadsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

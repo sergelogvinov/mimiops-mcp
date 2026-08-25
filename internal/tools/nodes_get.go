@@ -25,6 +25,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,7 +62,7 @@ func RegisterNodesGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDescription("Get detailed information about a single node"),
 		mcp.WithString("name", mcp.Description("node name"), mcp.Required()),
 		mcp.WithOutputSchema[NodeGetResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("nodes_get", opts...)
 	s.AddTool(tool, handlerNodesGet(mc))
@@ -70,7 +71,7 @@ func RegisterNodesGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerNodesGet returns a handler function for the nodes_get tool.
 func handlerNodesGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

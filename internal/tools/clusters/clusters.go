@@ -14,16 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tools
+// Package clusters provides utilities for handling multi-cluster configurations.
+package clusters
 
 import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 )
 
-// clusterOptions returns tool options for the `cluster` parameter, filtered of
+// ClusterOptions returns tool options for the `cluster` parameter, filtered of
 // nil entries for modes where the parameter is hidden.
-func clusterOptions(mc *k8s.MultiClusterClient) []mcp.ToolOption {
+func ClusterOptions(mc *k8s.MultiClusterClient) []mcp.ToolOption {
 	if mc == nil || !mc.IsMultiCluster() {
 		return nil
 	}
@@ -35,10 +36,14 @@ func clusterOptions(mc *k8s.MultiClusterClient) []mcp.ToolOption {
 	return opt
 }
 
-// resolveCluster resolves the target client for a tool call. An empty cluster
+// ResolveCluster resolves the target client for a tool call. An empty cluster
 // name selects the active cluster. In in-cluster mode the cluster parameter is
 // not exposed and the active client is always returned.
-func resolveCluster(mc *k8s.MultiClusterClient, req mcp.CallToolRequest) (*k8s.Client, error) {
+func ResolveCluster(mc *k8s.MultiClusterClient, req mcp.CallToolRequest) (*k8s.Client, error) {
+	if mc == nil {
+		return nil, nil
+	}
+
 	cluster := ""
 	if mc.IsMultiCluster() {
 		cluster = req.GetString("cluster", "")

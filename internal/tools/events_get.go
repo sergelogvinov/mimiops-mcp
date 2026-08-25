@@ -26,6 +26,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,7 +49,7 @@ func RegisterEventsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithString("field_selector", mcp.Description("field selector filter, e.g., 'type==Warning'"), mcp.DefaultString("type==Warning")),
 		mcp.WithInteger("limit", mcp.Description("maximum number of events to return"), mcp.DefaultNumber(50)),
 		mcp.WithOutputSchema[EventsGetResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("events_get", opts...)
 	s.AddTool(tool, handlerEventsGet(mc))
@@ -57,7 +58,7 @@ func RegisterEventsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerEventsGet returns a handler function for the events_get tool.
 func handlerEventsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

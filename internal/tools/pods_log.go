@@ -23,6 +23,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -45,7 +46,7 @@ func RegisterPodsLog(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithInteger("tail", mcp.Description("number of lines to show from end of logs"), mcp.DefaultNumber(20)),
 		mcp.WithBoolean("previous", mcp.Description("return previous terminated container logs"), mcp.DefaultBool(false)),
 		mcp.WithInteger("since_seconds", mcp.Description("only return logs newer than N seconds"), mcp.DefaultNumber(0)),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("pods_log", opts...)
 	s.AddTool(tool, handlerPodsLog(mc))
@@ -54,7 +55,7 @@ func RegisterPodsLog(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerPodsLog returns a handler function for the pods_log tool.
 func handlerPodsLog(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tools
+package toolshelm
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 )
 
 // HelmListResult represents the result of listing Helm releases.
@@ -44,7 +45,7 @@ func RegisterHelmList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithString("label_selector", mcp.Description("label selector filter")),
 		mcp.WithString("status_filter", mcp.Description("status filter or empty for all"), mcp.Enum("failed", "deployed", ""), mcp.DefaultString("")),
 		mcp.WithOutputSchema[HelmListResult](),
-	}, clusterOptions(mc)...)
+	}, clusters.ClusterOptions(mc)...)
 
 	tool := mcp.NewTool("helm_list", opts...)
 	s.AddTool(tool, handlerHelmList(mc))
@@ -53,7 +54,7 @@ func RegisterHelmList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerHelmList returns a handler function for the helm_list tool.
 func handlerHelmList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := resolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
