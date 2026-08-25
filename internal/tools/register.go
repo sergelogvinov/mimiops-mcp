@@ -136,6 +136,8 @@ func registerCore(srv *server.MCPServer, mc *k8s.MultiClusterClient, allowDestru
 	RegisterWorkloadsList(srv, mc)
 	RegisterWorkloadsGet(srv, mc)
 	RegisterWorkloadsDescribe(srv, mc)
+	RegisterServicesList(srv, mc)
+	RegisterServicesDescribe(srv, mc)
 	if allowDestructive {
 		RegisterPodsDelete(srv, mc)
 		RegisterJobsDelete(srv, mc)

@@ -168,6 +168,19 @@ type JobSpec struct {
 	ActiveDeadlineSeconds string `json:"activeDeadlineSeconds,omitempty" jsonschema:"activeDeadlineSeconds"`
 }
 
+// ServiceSummary is the trimmed, agent-friendly representation of a service
+// used by services_list (and available in the JSON output of other service tools).
+type ServiceSummary struct {
+	Name       string     `json:"name" jsonschema:"Name of the service"`
+	Namespace  string     `json:"namespace" jsonschema:"Namespace of the service"`
+	Type       string     `json:"type" jsonschema:"Type of the service (ClusterIP, NodePort, LoadBalancer, ExternalName)"`
+	ClusterIP  string     `json:"cluster_ip" jsonschema:"Cluster IP address"`
+	ExternalIP string     `json:"external_ip,omitempty" jsonschema:"External IP address"`
+	Ports      []PortInfo `json:"ports" jsonschema:"List of ports"`
+	Selector   string     `json:"selector" jsonschema:"Label selector as comma-separated string"`
+	Age        string     `json:"age" jsonschema:"Age of the service"`
+}
+
 // PodSummary is the trimmed, agent-friendly representation of a pod used by
 // pods_list (and available in the JSON output of other pod tools).
 type PodSummary struct {
@@ -237,4 +250,19 @@ type LogStream struct {
 	Pod       string `json:"pod" jsonschema:"Name of the pod"`
 	Container string `json:"container" jsonschema:"Name of the container"`
 	Logs      string `json:"logs" jsonschema:"Raw log output from the container"`
+}
+
+// PortInfo represents information about a service port.
+type PortInfo struct {
+	Name string `json:"name,omitempty" jsonschema:"Name of the port"`
+	Port string `json:"port" jsonschema:"Port number/(TCP/UDP)"`
+}
+
+// EndpointInfo represents information about a service endpoint.
+type EndpointInfo struct {
+	IP        string `json:"ip" jsonschema:"Endpoint IP address"`
+	Port      string `json:"port" jsonschema:"Endpoint port"`
+	TargetRef string `json:"target_ref,omitempty" jsonschema:"Reference to the target pod"`
+	NodeName  string `json:"node_name,omitempty" jsonschema:"Node where the endpoint is located"`
+	Ready     bool   `json:"ready" jsonschema:"Whether the endpoint is ready"`
 }
