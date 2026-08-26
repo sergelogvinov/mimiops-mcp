@@ -80,7 +80,7 @@ func toPodConditionInfo(pod *corev1.Pod) []ConditionInfo {
 }
 
 // fetchPodLogStream fetches logs from a single pod and returns a LogStream.
-func fetchPodLogStream(ctx context.Context, client *k8s.Client, namespace, podName, container string, tail, sinceSeconds int, previous bool) (LogStream, error) {
+func fetchPodLogStream(ctx context.Context, client *k8s.Client, namespace, podName, container, stream string, tail, sinceSeconds int, previous bool) (LogStream, error) {
 	// Get pod to check container names
 	pod, err := client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
@@ -104,6 +104,10 @@ func fetchPodLogStream(ctx context.Context, client *k8s.Client, namespace, podNa
 		Container: container,
 		TailLines: &tailInt64,
 		Previous:  previous,
+	}
+
+	if stream != "" {
+		logOpts.Stream = &stream
 	}
 
 	if sinceSeconds > 0 {

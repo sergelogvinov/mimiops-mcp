@@ -135,7 +135,7 @@ func handlerJobsLog(mc *k8s.MultiClusterClient) func(ctx context.Context, req mc
 		// Fetch logs from pods
 		streams := make([]LogStream, 0, len(podsToFetch))
 		for _, pod := range podsToFetch {
-			stream, err := fetchPodLogStream(ctx, client, namespace, pod.Name, container, tail, 0, previous)
+			stream, err := fetchPodLogStream(ctx, client, namespace, pod.Name, container, "", tail, 0, previous)
 			if err != nil {
 				return mcp.NewToolResultErrorf("failed to fetch logs for pod '%s': %v", pod.Name, err), nil
 			}

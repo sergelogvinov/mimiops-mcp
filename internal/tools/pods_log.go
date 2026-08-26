@@ -42,7 +42,8 @@ func RegisterPodsLog(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDescription("Fetch pod logs"),
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
-		mcp.WithString("container", mcp.Description("container name (optional)")),
+		mcp.WithString("container", mcp.Description("container name")),
+		// mcp.WithString("stream", mcp.Description("stream name, default is all"), mcp.Enum("All", "Stdout", "Stderr")),
 		mcp.WithInteger("tail", mcp.Description("number of lines to show from end of logs"), mcp.DefaultNumber(20)),
 		mcp.WithBoolean("previous", mcp.Description("return previous terminated container logs"), mcp.DefaultBool(false)),
 		mcp.WithInteger("since_seconds", mcp.Description("only return logs newer than N seconds"), mcp.DefaultNumber(0)),
@@ -71,6 +72,7 @@ func handlerPodsLog(mc *k8s.MultiClusterClient) func(ctx context.Context, req mc
 		}
 
 		container := req.GetString("container", "")
+		streamName := req.GetString("stream", "") // Alpha feature: PodLogsQuerySplitStreams
 		tail := req.GetInt("tail", 20)
 		previous := req.GetBool("previous", false)
 		sinceSeconds := req.GetInt("since_seconds", 0)
@@ -81,13 +83,14 @@ func handlerPodsLog(mc *k8s.MultiClusterClient) func(ctx context.Context, req mc
 			"namespace", namespace,
 			"pod", name,
 			"container", container,
+			"stream", streamName,
 			"tail", tail,
 			"previous", previous,
 			"since_seconds", sinceSeconds,
 		)
 
 		// Get pod to check container name
-		stream, err := fetchPodLogStream(ctx, client, namespace, name, container, tail, sinceSeconds, previous)
+		stream, err := fetchPodLogStream(ctx, client, namespace, name, container, streamName, tail, sinceSeconds, previous)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return mcp.NewToolResultErrorf("pod '%s' in namespace '%s' not found", name, namespace), nil
