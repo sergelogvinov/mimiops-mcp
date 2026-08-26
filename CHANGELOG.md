@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.2.1...v0.3.0) (2026-08-26)
+
+
+### Features
+
+* add extensions flag to enable optional tool groups ([ad03310](https://github.com/sergelogvinov/mimiops-mcp/commit/ad03310adb7e044dcb3dde28b842bcfdd59e122a))
+* add multi-cluster support ([2170263](https://github.com/sergelogvinov/mimiops-mcp/commit/21702634e38f2ed8a7cf29e64059c946f64d5ed8))
+* build mcpb ([3876ab6](https://github.com/sergelogvinov/mimiops-mcp/commit/3876ab6016fd4a02a3dd596888cb0b3896bbfe24))
+* fluxcd tools ([d1c5c89](https://github.com/sergelogvinov/mimiops-mcp/commit/d1c5c89bc371c2bc649057ee375491937542ed8e))
+* log stream ([cd6a93e](https://github.com/sergelogvinov/mimiops-mcp/commit/cd6a93ebdd7a7eb0f7109427f74baf00727ffa27))
+* service resource ([fae3370](https://github.com/sergelogvinov/mimiops-mcp/commit/fae3370105eebe57c666716925f33ab6664ff78b))
+
 ## [0.2.1](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.2.0...v0.2.1) (2026-08-23)
 
 
