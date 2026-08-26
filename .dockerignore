@@ -4,6 +4,9 @@
 **/.gitignore
 #
 bin/
+dist/
+bundle/
+hack/
 docs/
 Dockerfile
 
@@ -12,6 +15,7 @@ Dockerfile
 *.yml
 *.zip
 *.sql
+*.mcpb
 
 # cosign
 /cosign.key

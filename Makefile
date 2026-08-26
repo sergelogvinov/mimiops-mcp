@@ -22,6 +22,14 @@ BUILD_ARGS += --output type=docker
 endif
 
 COSING_ARGS ?=
+BUNDLE_DIR ?= bundle
+
+############
+
+MCPB_OS ?= $(OS)
+ifeq ($(OS),windows)
+MCPB_OS = win32
+endif
 
 ############
 
@@ -55,7 +63,8 @@ build-all-archs:
 
 .PHONY: clean
 clean: ## Clean
-	rm -rf bin dist .cache .gocache
+	rm -rf bin/ dist/ .cache/ .gocache/
+	rm -rf mimiops-mcp_*.mcpb
 
 .PHONY: tools
 tools:
@@ -138,8 +147,13 @@ docs:
 		charts/mimiops-mcp > docs/deploy/mimiops-mcp-talos.yml
 	helm-docs --sort-values-order=file charts/mimiops-mcp
 
-release-update:
-	git-chglog --config hack/chglog-config.yml -o CHANGELOG.md
+.PHONY: release-mcpb
+release-mcpb: ## Release MCPB bundle
+	@rm -rf $(BUNDLE_DIR)/server
+	@mkdir -p $(BUNDLE_DIR)/server
+	cp -r bin/default_$(OS)_$(ARCH)_*/bin/mimiops-mcp* $(BUNDLE_DIR)/server/
+	jq --arg v "$(TAG)" --arg p "$(MCPB_OS)" '.version = $$v | .compatibility.platforms = [$$p]' manifest.json > $(BUNDLE_DIR)/manifest.json
+	npx @anthropic-ai/mcpb pack $(BUNDLE_DIR) mimiops-mcp_$(OS)_$(ARCH).mcpb
 
 ############
 #

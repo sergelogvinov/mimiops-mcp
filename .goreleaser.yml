@@ -25,6 +25,8 @@ builds:
       - v1
     goarm64:
       - v8.0
+    hooks:
+      post: make release-mcpb OS={{ .Os }} ARCH={{ .Arch }} VERSION={{ .Version }} BUNDLE_DIR={{ dir .Path }}/bundle
 
 snapshot:
   version_template: edge
@@ -125,6 +127,8 @@ docker_signs:
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+  extra_files:
+    - glob: ./mimiops-mcp_*.mcpb
 
 signs:
   - artifacts: checksum
@@ -136,6 +140,12 @@ signs:
       - "--bundle=${signature}"
       - "${artifact}"
     output: true
+
+publishers:
+  - name: mcpb
+    cmd: gh release upload {{ .Tag }} mimiops-mcp_{{ .Os }}_{{ .Arch }}.mcpb --clobber
+    env:
+      - GH_TOKEN={{ .Env.GITHUB_TOKEN }}
 
 mcp:
   name: io.github.sergelogvinov/mimiops-mcp

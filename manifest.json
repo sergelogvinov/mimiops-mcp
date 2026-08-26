@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "mimiops",
+  "version": "0.0.0",
+  "display_name": "MimiOps MCP Server",
+  "description": "MimiOps is an opinionated MCP server for Kubernetes",
+  "homepage": "https://github.com/sergelogvinov/mimiops-mcp",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Serge Logvinov",
+    "url": "https://github.com/sergelogvinov/mimiops-mcp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sergelogvinov/mimiops-mcp"
+  },
+  "server": {
+    "type": "binary",
+    "entry_point": "server/mimiops-mcp",
+    "mcp_config": {
+      "command": "${__dirname}/server/mimiops-mcp",
+      "args": [],
+      "env": {
+        "KUBECONFIG": "${user_config.kubeconfig}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "keywords": [
+    "kubernetes",
+    "helm"
+  ],
+  "user_config": {
+    "kubeconfig": {
+      "type": "file",
+      "title": "Kubeconfig File",
+      "description": "Path to your kubeconfig file",
+      "default": "${HOME}/.kube/config",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ]
+  }
+}
