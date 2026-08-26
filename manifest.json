@@ -20,7 +20,9 @@
     "entry_point": "server/mimiops-mcp",
     "mcp_config": {
       "command": "${__dirname}/server/mimiops-mcp",
-      "args": [],
+      "args": [
+        "mcp"
+      ],
       "env": {
         "KUBECONFIG": "${user_config.kubeconfig}"
       }

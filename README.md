@@ -25,91 +25,140 @@ This makes Mimi OPS an opinionated interface between AI agents and Kubernetes: p
 
 Keep your AI on the leash.
 
-### Kubernetes basic tools:
+### Kubernetes core tools
 
-- Pods
-  - list — list pods and their current status.
-  - get — get detailed information about a pod.
-  - describe — inspect pod status, conditions, events, and related information.
-  - logs — read container logs for troubleshooting.
-  - delete — safely restart a workload by deleting a pod and allowing its controller to recreate it.
-- CronJobs and Jobs
-  - list — list CronJobs and Jobs.
-  - get — get information about a specific resource.
-  - describe — inspect status, conditions, events, and failures.
-- Deployments, StatefulSets, and DaemonSets
-  - list — list workloads and their current status.
-  - get — get information about a specific workload.
-  - describe — inspect replicas, rollout status, conditions, and related events.
-- Services
-  - list — list services
-  - describe — inspect status, events, and related resources.
+Core tools are always registered. The names below are the MCP tool names exposed by the server:
 
-### Helm integration
+- Clusters: `clusters_list` (multi-cluster configurations only), `clusters_describe`.
+- Pods: `pods_list`, `pods_get`, `pods_describe`, `pods_log`.
+- Jobs: `jobs_list`, `jobs_get`, `jobs_describe`, `jobs_log`, `jobs_create`.
+- CronJobs: `cronjobs_list`, `cronjobs_get`, `cronjobs_describe`.
+- Nodes: `nodes_list`, `nodes_get`.
+- Namespaces: `namespaces_list`, `namespaces_get`.
+- Resource configuration: `resourcequotas_list`, `resourcequotas_get`, `limitranges_list`, `limitranges_get`, `storageclasses_list`, `priorityclasses_list`.
+- Events: `events_get`.
+- Workloads (Deployments, StatefulSets, and DaemonSets): `workloads_list`, `workloads_get`, `workloads_describe`.
+- Services: `services_list`, `services_describe`.
 
-Mimi OPS can inspect Helm-managed workloads and help recover them when a deployment fails:
+The following additional recovery tools are registered only when `--allow-destructive` is enabled:
 
-- list — list Helm releases.
-- describe — show release information, status, revision, and related resources.
-- rollback — roll back a release to a previous working revision when the current release is in a broken state.
+- `pods_delete` — delete a pod so its controller can recreate it.
+- `jobs_delete` — delete a Job.
+- `cronjobs_suspend`, `cronjobs_resume` — suspend or resume scheduled runs.
+- `workloads_scale` — scale a Deployment, StatefulSet, or DaemonSet.
 
-### FluxCD integration
+### Helm extension
 
-Mimi OPS can work with FluxCD-managed resources without directly changing resources that are controlled by GitOps:
+Helm tools are enabled by default with `--extensions helm`:
 
-- Reconcile Flux source resources to fetch the latest configuration.
-- Reconcile HelmRelease resources to retry or apply the expected Helm state.
-- Inspect reconciliation status and errors to understand why a deployment is not ready.
+- `helm_list` — list Helm releases.
+- `helm_status` — inspect release status, revision, and related information.
+- `helm_rollback` — roll back a release to its previous revision; available only with `--allow-destructive`.
+
+### FluxCD extension
+
+Enable FluxCD tools with `--extensions fluxcd` (or `--extensions all`). Read-only inspection tools include:
+
+- GitRepository: `flux_gitrepositories_list`, `flux_gitrepositories_describe`.
+- OCIRepository: `flux_ocirepositories_list`, `flux_ocirepositories_describe`.
+- HelmRelease: `flux_helmreleases_list`, `flux_helmreleases_describe`.
+- Kustomization: `flux_kustomizations_list`, `flux_kustomizations_describe`.
+
+With `--allow-destructive`, Flux also exposes:
+
+- `flux_reconcile` — trigger an immediate reconciliation of a GitRepository, HelmRelease, or Kustomization.
+- `flux_reconciliation` — suspend or resume a Flux HelmRelease or Kustomization.
 
 ## Installation
 
-A Kubernetes **MCP (Model Context Protocol)** server written in Go.
-It exposes Kubernetes operations to MCP clients (Claude Desktop, Cursor, VS Code, etc.) over two transports:
+```sh
+brew install sergelogvinov/tap/mimiops-mcp
+```
 
-- `mimiops-mcp mcp` — **stdio**, for desktop MCP clients.
-- `mimiops-mcp server` — **HTTP/SSE**, for web/remote MCP clients.
+### MCPB-compatible clients
+
+MimiOPS includes an MCPB manifest for clients that support MCP bundles, such as Claude Desktop.
+Download the `.mcpb` release bundle and open/import it in the client. The bundle:
+
+- starts `server/mimiops-mcp mcp`;
+- prompts for a kubeconfig file; and
+- passes that file as `KUBECONFIG` to the server.
+
+### Manual editor configuration
+
+For clients that use a JSON MCP configuration, add a server entry similar to the following:
+
+```json
+{
+  "mcpServers": {
+    "mimiops": {
+      "command": "mimiops-mcp",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Zed uses a command object under `context_servers`:
+
+```json
+{
+  "context_servers": {
+    "mimiops": {
+      "command": {
+        "path": "mimiops-mcp",
+        "args": ["mcp"],
+        "env": {
+          "KUBECONFIG": "/absolute/path/to/kubeconfig"
+        }
+      }
+    }
+  }
+}
+```
+
+Restart or reload the client after saving its configuration.
+The server will then appear as `mimiops` and expose the tools listed below.
 
 ## Running
 
 ### Common flags
 
-Flags are **global (persistent)** and accepted on both subcommands:
+Kubernetes and application flags are **global (persistent)** and inherited by `mcp`, `server`, and `tools`:
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--kubeconfig <path>` | auto | Path to kubeconfig (defaults to `$KUBECONFIG` then `~/.kube/config`) |
-| `--context <name>` | current-context | Kubernetes context to use |
-| `--namespace <name>` | all namespaces | Scope operations to a namespace |
-| `--allow-destructive` | `false` | Enable destructive tools (e.g. `pods_delete`) |
-| `--log-level <level>` | `info` | `debug`, `info`, `warn`, `error` |
+| Flag | Default | Environment variable | Description |
+|------|---------|----------------------|-------------|
+| `--kubeconfig <path>` | auto | `KUBECONFIG` | Path to kubeconfig; uses the default Kubernetes loading rules when unset |
+| `--context <name>` | current context | `CONTEXT` | Kubernetes context to use |
+| `--namespace <name>` | all namespaces | `NAMESPACE` | Default namespace scope for operations |
+| `--as <user>` | unset | `AS` | Kubernetes impersonation user |
+| `--extensions <list>` | `helm` | `EXTENSIONS` | Comma-separated extensions to enable, or `all` |
+| `--allow-destructive` | `false` | `ALLOW_DESTRUCTIVE` | Enable destructive or mutating tools |
+| `--log-level <level>` | `info` | `LOG_LEVEL` | `debug`, `info`, `warn`, or `error` |
+| `--log-format <format>` | `text` | `LOG_FORMAT` | `text` or `json` |
 
-Per-command flags:
+The Kubernetes client also exposes the standard `genericclioptions` connection and authentication flags. The `tools` command adds this command-specific flag:
 
 | Command | Flag | Default | Description |
 |---------|------|---------|-------------|
-| `server` | `--port` | `8080` | HTTP/SSE listen port |
+| `tools` | `--output`, `-o` | `text` | Render tool results as `text`, `json`, or `yaml` |
+| `server` | `--port` | `8080` | HTTP/SSE listen port; environment variable: `PORT` |
+
+Available commands are `mcp` (stdio), `server` (HTTP/SSE), `tools` (direct CLI invocation), and `version`.
 
 ### Examples
 
 ```sh
-# stdio against a specific context
-./bin/mimiops-mcp mcp --kubeconfig ~/.kube/dev.yaml --context prod-east
+# stdio with kubeconfig and impersonation
+./bin/mimiops-mcp mcp --kubeconfig ~/.kube/dev.yaml --as developer
 
 # SSE server scoped to a namespace, with destructive tools enabled
 ./bin/mimiops-mcp server --namespace default --allow-destructive --port 8080
+
+# List enabled tools, or invoke one directly from the CLI
+./bin/mimiops-mcp tools --extensions all
+./bin/mimiops-mcp tools pods_list namespace=default -o json
 ```
-
-## Development
-
-```sh
-make lint       # golangci-lint
-make unit       # unit tests (build tag `unit`)
-make test       # lint + unit
-make licenses   # license audit (forbidden/restricted/unknown)
-make docs       # (Docker image docs targets are also available; see `make help`)
-```
-
-Use `make help` for a full target list.
 
 ## License
 
