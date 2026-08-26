@@ -41,6 +41,18 @@ rules:
 - apiGroups: [""]
   resources: [events]
   verbs: [get, list, watch]
+# Flux sources — FluxCD extension
+- apiGroups: ["source.toolkit.fluxcd.io"]
+  resources: [gitrepositories, gitrepositories/status, ocirepositories, ocirepositories/status]
+  verbs: [get, list, watch]
+# Flux Helm — FluxCD extension
+- apiGroups: ["helm.toolkit.fluxcd.io"]
+  resources: [helmreleases, helmreleases/status]
+  verbs: [get, list, watch]
+# Flux Kustomize — FluxCD extension
+- apiGroups: ["kustomize.toolkit.fluxcd.io"]
+  resources: [kustomizations, kustomizations/status]
+  verbs: [get, list, watch]
 ---
 # Destructive permissions (separate ClusterRole, not bound by default)
 apiVersion: rbac.authorization.k8s.io/v1
@@ -57,6 +69,17 @@ rules:
 - apiGroups: ["apps"]
   resources: [deployments/scale, statefulsets/scale]
   verbs: [get, update, patch]
+# Flux reconcile (writes reconcile.fluxcd.io/requestedAt annotation) — FluxCD extension
+- apiGroups: ["source.toolkit.fluxcd.io"]
+  resources: [gitrepositories, ocirepositories]
+  verbs: [get, list, watch, patch, update]
+# Flux reconcile + suspend/resume (writes spec.suspend) — FluxCD extension
+- apiGroups: ["helm.toolkit.fluxcd.io"]
+  resources: [helmreleases]
+  verbs: [get, list, watch, patch, update]
+- apiGroups: ["kustomize.toolkit.fluxcd.io"]
+  resources: [kustomizations]
+  verbs: [get, list, watch, patch, update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

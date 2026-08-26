@@ -21,6 +21,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/utils"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // Client is a Kubernetes clientset plus the resolved identity of the active
@@ -29,6 +30,7 @@ type Client struct {
 	kubernetes.Interface
 
 	configFlags *genericclioptions.ConfigFlags
+	restConfig  *rest.Config
 	sanitizer   *utils.Sanitizer
 
 	// ContextName is the resolved active context (from --context or current-context).
@@ -58,6 +60,11 @@ type UserInfo struct {
 // ToRawKubeConfigLoader returns the underlying ConfigFlags for k8s client creation.
 func (c *Client) ToRawKubeConfigLoader() *genericclioptions.ConfigFlags {
 	return c.configFlags
+}
+
+// RESTConfig returns the underlying rest.Config for k8s client creation.
+func (c *Client) RESTConfig() *rest.Config {
+	return c.restConfig
 }
 
 // Sanitizer returns the log sanitizer for masking sensitive values in logs.

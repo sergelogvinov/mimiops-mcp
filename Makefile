@@ -68,11 +68,11 @@ build:
 
 .PHONY: run
 run: ## Run
-	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp server --port 8080 --log-level=debug --allow-destructive
+	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp server --port 8080 --log-level=debug --allow-destructive --extensions=all
 
 .PHONY: run-mcp
 run-mcp: ## Run mcp
-	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp mcp --log-level=debug --allow-destructive
+	go run $(GO_LDFLAGS) ./cmd/mimiops-mcp mcp --log-level=debug --allow-destructive --extensions=all
 
 .PHONY: lint
 lint: ## Lint Code

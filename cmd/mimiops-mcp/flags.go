@@ -45,7 +45,7 @@ const (
 )
 
 const (
-	defaultExtensions       = "all"
+	defaultExtensions       = "helm"
 	defaultAllowDestructive = false
 	defaultLogLevel         = "info"
 	defaultLogFormat        = "text"

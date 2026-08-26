@@ -22,6 +22,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	toolsfluxcd "github.com/sergelogvinov/mimiops-mcp/internal/tools/fluxcd"
 	toolshelm "github.com/sergelogvinov/mimiops-mcp/internal/tools/helm"
 )
 
@@ -35,7 +36,7 @@ type Extension struct {
 // listed here — they are always registered by registerCore.
 var extensionsRegistry = []Extension{
 	{Name: "helm", Register: registerHelm},
-	// future: {Name: "fluxcd", Register: registerFluxCD},
+	{Name: "fluxcd", Register: registerFluxCD},
 }
 
 // RegisterTools wires the core tools and the requested extensions into the MCP
@@ -153,5 +154,22 @@ func registerHelm(srv *server.MCPServer, mc *k8s.MultiClusterClient, allowDestru
 	toolshelm.RegisterHelmStatus(srv, mc)
 	if allowDestructive {
 		toolshelm.RegisterHelmRollback(srv, mc)
+	}
+}
+
+// registerFluxCD wires all FluxCD tools into the MCP server.
+func registerFluxCD(srv *server.MCPServer, mc *k8s.MultiClusterClient, allowDestructive bool) {
+	toolsfluxcd.RegisterGitRepositoriesList(srv, mc)
+	toolsfluxcd.RegisterGitRepositoriesDescribe(srv, mc)
+	toolsfluxcd.RegisterOCIRepositoriesList(srv, mc)
+	toolsfluxcd.RegisterOCIRepositoriesDescribe(srv, mc)
+	toolsfluxcd.RegisterHelmReleasesList(srv, mc)
+	toolsfluxcd.RegisterHelmReleasesDescribe(srv, mc)
+	toolsfluxcd.RegisterKustomizationsList(srv, mc)
+	toolsfluxcd.RegisterKustomizationsDescribe(srv, mc)
+
+	if allowDestructive {
+		toolsfluxcd.RegisterFluxReconcile(srv, mc)
+		toolsfluxcd.RegisterFluxReconciliation(srv, mc)
 	}
 }

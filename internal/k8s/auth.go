@@ -65,8 +65,9 @@ func (mc *MultiClusterClient) newClientForCluster(contextName string) (*Client, 
 	}
 
 	return &Client{
-		configFlags: configFlags,
 		Interface:   clientSet,
+		configFlags: configFlags,
+		restConfig:  restConfig,
 		ContextName: contextName,
 		ClusterName: kubeCtx.Cluster,
 		Namespace:   namespace,
@@ -96,8 +97,9 @@ func (mc *MultiClusterClient) newInClusterClient(restConfig *rest.Config) (*Clie
 	}
 
 	return &Client{
-		configFlags: configFlags,
 		Interface:   clientSet,
+		configFlags: configFlags,
+		restConfig:  restConfig,
 		ClusterName: "in-cluster",
 		Namespace:   namespace,
 		User:        contextAuthInfo(restConfig),
