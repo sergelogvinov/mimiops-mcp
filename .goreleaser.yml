@@ -54,7 +54,7 @@ archives:
 homebrew_casks:
   - name: mimiops-mcp
     description: MimiOps is an opinionated MCP server for Kubernetes
-    homepage: https://github.com/sergelogvinov/mimiops-mcp
+    homepage: "https://github.com/sergelogvinov/{{ .ProjectName }}"
     license: Apache-2.0
 
     directory: Casks
@@ -87,11 +87,11 @@ homebrew_casks:
           end
 
 dockers_v2:
-  - id: default
+  - id: docker
     flags:
       - --target=release
     images:
-      - ghcr.io/sergelogvinov/mimiops-mcp
+      - "ghcr.io/sergelogvinov/{{ .ProjectName }}"
     tags:
       - "v{{.Version}}"
       - "{{ if not .IsNightly }}latest{{ end }}"
@@ -99,14 +99,14 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
     labels:
-      io.modelcontextprotocol.server.name: "io.github.sergelogvinov/mimiops-mcp"
-      io.artifacthub.package.readme-url: "https://raw.githubusercontent.com/sergelogvinov/mimiops-mcp/main/README.md"
+      io.modelcontextprotocol.server.name: "io.github.sergelogvinov/{{ .ProjectName }}"
+      io.artifacthub.package.readme-url: "https://raw.githubusercontent.com/sergelogvinov/{{ .ProjectName }}/main/README.md"
       io.artifacthub.package.license: "Apache-2.0"
     annotations:
       org.opencontainers.image.name: "{{ .ProjectName }}"
       org.opencontainers.image.description: "MimiOps is an opinionated MCP server for Kubernetes"
       org.opencontainers.image.licenses: "Apache-2.0"
-      org.opencontainers.image.source: "https://github.com/sergelogvinov/mimiops-mcp"
+      org.opencontainers.image.source: "https://github.com/sergelogvinov/{{ .ProjectName }}"
       org.opencontainers.image.url: "{{ .GitURL }}"
       org.opencontainers.image.created: "{{ .Date }}"
       org.opencontainers.image.version: "{{ .Version }}"
@@ -116,7 +116,7 @@ docker_digest:
   name_template: "digest.txt"
 
 docker_signs:
-  - id: default
+  - id: docker
     cmd: cosign
     args:
       - sign
@@ -143,29 +143,35 @@ signs:
 
 publishers:
   - name: mcpb
-    cmd: gh release upload {{ .Tag }} mimiops-mcp_{{ .Os }}_{{ .Arch }}.mcpb --clobber
+    ids:
+      - default
+    cmd: gh release upload {{ .Tag }} {{ .ProjectName }}_{{ .Os }}_{{ .Arch }}.mcpb --clobber
     env:
       - GH_TOKEN={{ .Env.GITHUB_TOKEN }}
 
 mcp:
-  name: io.github.sergelogvinov/mimiops-mcp
+  name: io.github.sergelogvinov/{{ .ProjectName }}
   title: "MimiOps mcp server for Kubernetes"
   description: "MimiOps is an opinionated MCP server for Kubernetes"
-  homepage: "https://github.com/sergelogvinov/mimiops-mcp"
+  homepage: "https://github.com/sergelogvinov/{{ .ProjectName }}"
   auth:
     type: github-oidc
     token: "{{ .Env.GITHUB_TOKEN }}"
   repository:
-    url: "https://github.com/sergelogvinov/mimiops-mcp"
+    url: "https://github.com/sergelogvinov/{{ .ProjectName }}"
     source: github
     id: "1334949924"
+  transports:
+    - type: stdio
+    - type: streamable-http
   # https://github.com/goreleaser/goreleaser/discussions/6251
   packages:
     - registry_type: oci
-      identifier: "ghcr.io/sergelogvinov/mimiops-mcp:v{{ .Version }}"
+      identifier: "ghcr.io/sergelogvinov/{{ .ProjectName }}:v{{ .Version }}"
       transport:
         type: stdio
     # - registry_type: mcpb
-    #   identifier: "@sergelogvinov/mimiops-mcp"
+    #   identifier: "https://github.com/sergelogvinov/{{ .ProjectName }}/releases/download/v{{ .Version }}/mimiops-mcp.mcpb"
+    #   fileSha256: '{{ sha256 ./mimiops-mcp.mcpb }}'
     #   transport:
     #     type: stdio
