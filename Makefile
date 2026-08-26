@@ -141,10 +141,6 @@ docs:
 		--set-string image.tag=$(TAG) \
 		--set createNamespace=true \
 		charts/mimiops-mcp > docs/deploy/mimiops-mcp-release.yml
-	helm template -n mcps mimiops-mcp \
-		-f charts/mimiops-mcp/values.talos.yaml \
-		--set-string image.tag=$(TAG) \
-		charts/mimiops-mcp > docs/deploy/mimiops-mcp-talos.yml
 	helm-docs --sort-values-order=file charts/mimiops-mcp
 
 .PHONY: release-mcpb

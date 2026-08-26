@@ -1,0 +1,119 @@
+---
+# Source: mimiops-mcp/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mimiops-mcp
+  labels:
+    helm.sh/chart: mimiops-mcp-0.0.1
+    app.kubernetes.io/name: mimiops-mcp
+    app.kubernetes.io/instance: mimiops-mcp
+    app.kubernetes.io/version: "v0.3.0"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: true
+
+---
+# Source: mimiops-mcp/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mimiops-mcp
+  labels:
+    helm.sh/chart: mimiops-mcp-0.0.1
+    app.kubernetes.io/name: mimiops-mcp
+    app.kubernetes.io/instance: mimiops-mcp
+    app.kubernetes.io/version: "v0.3.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: mimiops-mcp
+    app.kubernetes.io/instance: mimiops-mcp
+
+---
+# Source: mimiops-mcp/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mimiops-mcp
+  labels:
+    helm.sh/chart: mimiops-mcp-0.0.1
+    app.kubernetes.io/name: mimiops-mcp
+    app.kubernetes.io/instance: mimiops-mcp
+    app.kubernetes.io/version: "v0.3.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mimiops-mcp
+      app.kubernetes.io/instance: mimiops-mcp
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: mimiops-mcp-0.0.1
+        app.kubernetes.io/name: mimiops-mcp
+        app.kubernetes.io/instance: mimiops-mcp
+        app.kubernetes.io/version: "v0.3.0"
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      enableServiceLinks: false
+      serviceAccountName: mimiops-mcp
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 65532
+        runAsUser: 65532
+      containers:
+        - name: mimiops-mcp
+          securityContext:
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+          image: "ghcr.io/sergelogvinov/mimiops-mcp:v0.3.0"
+          imagePullPolicy: IfNotPresent
+          args:
+            - server
+            - --port=8080
+            - --extensions=all
+            - --allow-destructive
+            - --log-level=info
+            - --log-format=json
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: mimiops-mcp
+                    app.kubernetes.io/instance: mimiops-mcp
+                namespaces:
+                  - "mcps"
+                topologyKey: kubernetes.io/hostname
+              weight: 1
