@@ -14,25 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package helm
+package toolshelm
 
-// ResourceList represents a list of Kubernetes resources managed by a Helm release.
-type ResourceList []Resource
-
-// Resource represents a single Kubernetes resource managed by a Helm release.
-type Resource struct {
-	Name     string            `json:"name" jsonschema:"Name of the Kubernetes resource"`
-	Selector map[string]string `json:"selector,omitempty" jsonschema:"Selector labels of the Kubernetes resource"`
-}
-
-// HistoryEntry represents a single revision in the Helm release history.
-type HistoryEntry struct {
+// ReleaseSummary is the trimmed representation of a Helm release used by helm_list.
+type ReleaseSummary struct {
+	Name         string `json:"name" jsonschema:"Helm release"`
+	Namespace    string `json:"namespace" jsonschema:"Namespace"`
 	Revision     int    `json:"revision" jsonschema:"Revision number"`
-	Updated      string `json:"updated" jsonschema:"Updated time"`
-	Status       string `json:"status" jsonschema:"Status (deployed, superseded, failed, pending, etc.)"`
+	Age          string `json:"age" jsonschema:"Last updated age"`
+	Updated      string `json:"updated" jsonschema:"Last updated time"`
+	Status       string `json:"status" jsonschema:"Status (deployed, failed, pending, etc.)"`
+	Description  string `json:"description" jsonschema:"Description"`
+	ChartName    string `json:"chart" jsonschema:"Chart name"`
 	ChartVersion string `json:"chart_version" jsonschema:"Chart version"`
-	AppVersion   string `json:"app_version" jsonschema:"Application version"`
-	Description  string `json:"description" jsonschema:"Description message"`
+	AppVersion   string `json:"app_version" jsonschema:"Application version deployed"`
 }
 
 // RollbackResult represents the result of a helm_rollback operation.

@@ -18,13 +18,19 @@ limitations under the License.
 package helm
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"helm.sh/helm/v4/pkg/action"
-	v1 "helm.sh/helm/v4/pkg/release/v1"
+	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/release"
+	helmv1 "helm.sh/helm/v4/pkg/release/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 // Client wraps the Helm SDK client.
@@ -34,7 +40,15 @@ type Client struct {
 
 // NewHelmClient creates a new HelmClient from a RESTClientGetter.
 func NewHelmClient(kclient *k8s.Client, namespace string) (*Client, error) {
-	configFlags := kclient.ToRawKubeConfigLoader()
+	origFlags := kclient.ToRawKubeConfigLoader()
+	configFlags := &genericclioptions.ConfigFlags{
+		KubeConfig: origFlags.KubeConfig,
+		Namespace:  &namespace,
+		Context:    origFlags.Context,
+		// Global overrides that apply to every context.
+		Impersonate:      origFlags.Impersonate,
+		ImpersonateGroup: origFlags.ImpersonateGroup,
+	}
 
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(configFlags, namespace, os.Getenv("HELM_DRIVER")); err != nil {
@@ -45,7 +59,7 @@ func NewHelmClient(kclient *k8s.Client, namespace string) (*Client, error) {
 }
 
 // ListReleases lists Helm releases in a namespace.
-func (c *Client) ListReleases(namespace, labelSelector, statusFilter string) ([]ReleaseSummary, error) {
+func (c *Client) ListReleases(namespace, labelSelector, statusFilter string) ([]helmv1.Release, error) {
 	listCmd := action.NewList(c.actionClient)
 	listCmd.Selector = labelSelector
 	listCmd.AllNamespaces = namespace == ""
@@ -60,7 +74,7 @@ func (c *Client) ListReleases(namespace, labelSelector, statusFilter string) ([]
 	}
 	listCmd.SetStateMask()
 
-	releases, err := listCmd.Run()
+	res, err := listCmd.Run()
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return nil, fmt.Errorf("no releases found: %w", err)
@@ -68,30 +82,21 @@ func (c *Client) ListReleases(namespace, labelSelector, statusFilter string) ([]
 		return nil, fmt.Errorf("failed to list releases: %w", err)
 	}
 
-	var summaries []ReleaseSummary
-	for _, r := range releases {
-		rel, ok := r.(*v1.Release)
+	var releases []helmv1.Release
+	for _, r := range res {
+		rel, ok := r.(*helmv1.Release)
 		if !ok {
 			continue
 		}
 
-		summaries = append(summaries, ReleaseSummary{
-			Name:         rel.Name,
-			Namespace:    rel.Namespace,
-			Revision:     rel.Version,
-			Updated:      rel.Info.LastDeployed.String(),
-			Status:       rel.Info.Status.String(),
-			ChartName:    rel.Chart.Metadata.Name,
-			ChartVersion: rel.Chart.Metadata.Version,
-			AppVersion:   rel.Chart.Metadata.AppVersion,
-		})
+		releases = append(releases, *rel)
 	}
 
-	return summaries, nil
+	return releases, nil
 }
 
 // GetRelease gets a single Helm release by name.
-func (c *Client) GetRelease(name, namespace string) (*ReleaseStatus, error) {
+func (c *Client) GetRelease(name, namespace string) (*helmv1.Release, error) {
 	getCmd := action.NewGet(c.actionClient)
 
 	release, err := getCmd.Run(name)
@@ -99,23 +104,36 @@ func (c *Client) GetRelease(name, namespace string) (*ReleaseStatus, error) {
 		return nil, fmt.Errorf("release '%s' not found in namespace '%s'", name, namespace)
 	}
 
-	// Cast to *v1.Release to access fields
-	rel, ok := release.(*v1.Release)
+	// Cast to *helmv1.Release to access fields
+	rel, ok := release.(*helmv1.Release)
 	if !ok {
 		return nil, fmt.Errorf("unexpected release type")
 	}
 
-	return &ReleaseStatus{
-		Name:         rel.Name,
-		Namespace:    rel.Namespace,
-		Revision:     rel.Version,
-		Status:       rel.Info.Status.String(),
-		LastDeployed: rel.Info.LastDeployed.String(),
-		Description:  rel.Info.Description,
-	}, nil
+	return rel, nil
 }
 
-// GetReleaseHistory gets the history of a Helm release (last 3 revisions).
+// GetReleaseResources gets a single Helm release by name and its resources.
+func (c *Client) GetReleaseResources(rel *helmv1.Release) (ResourceList, error) {
+	list := ResourceList{}
+
+	resources, err := c.actionClient.KubeClient.Build(bytes.NewBufferString(rel.Manifest), false)
+	if err != nil {
+		return ResourceList{}, fmt.Errorf("failed to build resources for release: %w", err)
+	}
+
+	for _, k := range resources {
+		selector, _, _ := getSelectorFromObject(k.Object) //nolint:errcheck
+		list = append(list, Resource{
+			Name:     fmt.Sprintf("%s/%s", k.Mapping.GroupVersionKind.Kind, k.Name),
+			Selector: selector,
+		})
+	}
+
+	return list, nil
+}
+
+// GetReleaseHistory gets the history of a Helm release.
 func (c *Client) GetReleaseHistory(name, namespace string, maxRevisions int) ([]HistoryEntry, error) {
 	historyCmd := action.NewHistory(c.actionClient)
 	historyCmd.Max = maxRevisions
@@ -127,18 +145,18 @@ func (c *Client) GetReleaseHistory(name, namespace string, maxRevisions int) ([]
 
 	var history []HistoryEntry
 	for _, r := range revisions {
-		// Cast to *v1.Release to access fields
-		rel, ok := r.(*v1.Release)
+		// Cast to *helmv1.Release to access fields
+		rel, ok := r.(*helmv1.Release)
 		if !ok {
 			continue
 		}
 		history = append(history, HistoryEntry{
-			Revision:    rel.Version,
-			Updated:     rel.Info.LastDeployed.String(),
-			Status:      rel.Info.Status.String(),
-			Chart:       rel.Chart.Metadata.Name + "-" + rel.Chart.Metadata.Version,
-			AppVersion:  rel.Chart.Metadata.AppVersion,
-			Description: rel.Info.Description,
+			Revision:     rel.Version,
+			Updated:      rel.Info.LastDeployed.String(),
+			Status:       rel.Info.Status.String(),
+			ChartVersion: rel.Chart.Metadata.Version,
+			AppVersion:   rel.Chart.Metadata.AppVersion,
+			Description:  rel.Info.Description,
 		})
 	}
 
@@ -146,9 +164,30 @@ func (c *Client) GetReleaseHistory(name, namespace string, maxRevisions int) ([]
 }
 
 // Rollback rolls back a Helm release to a specific revision.
-func (c *Client) Rollback(name string, revision int) error {
+func (c *Client) Rollback(name string, revision int, hooks bool) error {
 	rollbackCmd := action.NewRollback(c.actionClient)
 	rollbackCmd.Version = revision
+	rollbackCmd.WaitStrategy = kube.HookOnlyStrategy
+	rollbackCmd.DisableHooks = !hooks
+	rollbackCmd.WaitForJobs = hooks
 
 	return rollbackCmd.Run(name)
+}
+
+// UpdateStatus updates the status of a Helm release.
+func (c *Client) UpdateStatus(rls release.Releaser) error {
+	return c.actionClient.Releases.Update(rls)
+}
+
+func getSelectorFromObject(obj runtime.Object) (map[string]string, bool, error) {
+	typed := obj.(*unstructured.Unstructured)
+	kind := typed.Object["kind"]
+	switch kind {
+	case "ReplicaSet", "Deployment", "StatefulSet", "DaemonSet", "Job":
+		return unstructured.NestedStringMap(typed.Object, "spec", "selector", "matchLabels")
+	case "ReplicationController":
+		return unstructured.NestedStringMap(typed.Object, "spec", "selector")
+	default:
+		return nil, false, nil
+	}
 }

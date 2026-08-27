@@ -18,6 +18,7 @@ package toolshelm
 
 import (
 	"context"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -26,11 +27,16 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"helm.sh/helm/v4/pkg/release/common"
 )
 
 // HelmStatusResult represents the result of getting Helm release status.
 type HelmStatusResult struct {
-	Release helm.ReleaseStatus `json:"release" jsonschema:"Helm release status and history"`
+	ReleaseSummary
+
+	Resources       helm.ResourceList   `json:"resources,omitempty" jsonschema:"Kubernetes resources"`
+	History         []helm.HistoryEntry `json:"history,omitempty" jsonschema:"Last 3 revisions of the releases"`
+	Recommendations string              `json:"recommendations,omitempty" jsonschema:"Recommendations"`
 }
 
 // RegisterHelmStatus adds the helm_status tool, which gets the status of a Helm release.
@@ -93,10 +99,32 @@ func handlerHelmStatus(mc *k8s.MultiClusterClient) func(ctx context.Context, req
 			return mcp.NewToolResultErrorf("failed to get history for release: %v", err), nil
 		}
 
-		release.History = history
+		resources, err := helmClient.GetReleaseResources(release)
+		if err != nil {
+			return mcp.NewToolResultErrorf("failed to get resources for release: %v", err), nil
+		}
 
 		result := HelmStatusResult{
-			Release: *release,
+			ReleaseSummary: toHelmSummary(release),
+			History:        history,
+			Resources:      resources,
+		}
+
+		now := time.Now()
+		diff := now.Sub(release.Info.LastDeployed)
+
+		// Move to skill-based recommendations
+		switch result.Status {
+		case string(common.StatusFailed):
+			if diff > 15*time.Minute {
+				result.Recommendations = "The release has failed recently. Please check the logs and consider rolling back or fixing the issue."
+			}
+		case string(common.StatusPendingUpgrade):
+			if diff < 30*time.Minute {
+				result.Recommendations = "The release is in a pending-upgrade state. It may be due to a long-running operation. Please wait and check again later."
+			} else {
+				result.Recommendations = "The release is in a pending-upgrade state for more than 30 minutes. It is safe to retry the upgrade again or rollback to the previous revision without hooks."
+			}
 		}
 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil

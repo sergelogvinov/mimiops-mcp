@@ -267,15 +267,12 @@ func validateRequiredParams(tool mcp.Tool, args map[string]any) error {
 
 		var buf bytes.Buffer
 		fmt.Fprintf(&buf, "Error: missing required parameter(s): %s\n\n", strings.Join(missing, ", "))
-		fmt.Fprintf(&buf, "Usage: mimiops-mcp tools %s ", tool.Name)
+		fmt.Fprintf(&buf, "Usage: mimiops-mcp tools %s", tool.Name)
 
-		// Show required params as examples
-		for i, param := range missing {
-			if i > 0 {
-				buf.WriteString(" ")
-			}
-			fmt.Fprintf(&buf, "%s=<value>", param)
+		for param := range tool.InputSchema.Properties {
+			fmt.Fprintf(&buf, " %s=<value>", param)
 		}
+
 		return fmt.Errorf("%s", buf.String())
 	}
 

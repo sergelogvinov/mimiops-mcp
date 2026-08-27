@@ -222,13 +222,10 @@ func extractLabels(labels map[string]string) map[string]string {
 		"statefulset.kubernetes.io/pod-name",
 		"batch.kubernetes.io/controller-uid",
 		"app.kubernetes.io/version",
-		"app.kubernetes.io/managed-by",
 	}
 	ignoreKeysPrefix := []string{
 		"batch.kubernetes.io/",
 		"helm.sh/",
-		"kustomize.toolkit.fluxcd.io/",
-		"helm.toolkit.fluxcd.io/",
 	}
 
 	for k, v := range labels {

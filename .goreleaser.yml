@@ -111,6 +111,8 @@ dockers_v2:
       org.opencontainers.image.created: "{{ .Date }}"
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
+      io.artifacthub.package.readme-url: "https://raw.githubusercontent.com/sergelogvinov/{{ .ProjectName }}/main/README.md"
+      io.artifacthub.package.license: "Apache-2.0"
 
 docker_digest:
   name_template: "digest.txt"

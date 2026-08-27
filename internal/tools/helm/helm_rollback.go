@@ -18,6 +18,7 @@ package toolshelm
 
 import (
 	"context"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -26,11 +27,12 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"helm.sh/helm/v4/pkg/release/common"
 )
 
 // HelmRollbackResult represents the result of rolling back a Helm release.
 type HelmRollbackResult struct {
-	Rollback helm.RollbackResult `json:"rollback" jsonschema:"Helm rollback result"`
+	NewRevision int `json:"new_revision" jsonschema:"New revision number after rollback"`
 }
 
 // RegisterHelmRollback adds the helm_rollback tool, which rolls back a Helm release to the previous revision.
@@ -43,6 +45,7 @@ func RegisterHelmRollback(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDescription("Roll back a Helm release to the previous revision (one back)"),
 		mcp.WithString("name", mcp.Description("release name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
+		mcp.WithBoolean("hooks", mcp.Description("execute hooks during rollback"), mcp.DefaultBool(false)),
 		mcp.WithOutputSchema[HelmRollbackResult](),
 	}, clusters.ClusterOptions(mc)...)
 
@@ -68,11 +71,14 @@ func handlerHelmRollback(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 			return mcp.NewToolResultError("missing required parameter 'namespace'"), nil
 		}
 
+		hooks := req.GetBool("hooks", false)
+
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "helm_rollback called",
 			"cluster", client.ClusterName,
 			"name", name,
 			"namespace", namespace,
+			"hooks", hooks,
 		)
 
 		// Create Helm client
@@ -88,15 +94,32 @@ func handlerHelmRollback(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 		}
 
 		// Calculate previous revision (current - 1)
-		previousRevision := currentRelease.Revision
+		previousRevision := currentRelease.Version
 		newRevision := previousRevision - 1
+
+		now := time.Now()
+		diff := now.Sub(currentRelease.Info.LastDeployed)
+
+		switch currentRelease.Info.Status { // nolint:exhaustive
+		case common.StatusPendingUpgrade, common.StatusPendingRollback:
+			if diff > 30*time.Minute {
+				currentRelease.SetStatus(common.StatusDeployed, "Automatically marking as deployed")
+
+				err = helmClient.UpdateStatus(currentRelease)
+				if err != nil {
+					return mcp.NewToolResultErrorf("failed to update status for release: %v", err), nil
+				}
+
+				return mcp.NewToolResultText("Automatically marking as deployed"), nil
+			}
+		}
 
 		if newRevision < 1 {
 			return mcp.NewToolResultErrorf("release '%s' in namespace '%s' is at revision %d — nothing to roll back to", name, namespace, previousRevision), nil
 		}
 
 		// Perform the rollback to the previous revision
-		err = helmClient.Rollback(name, newRevision)
+		err = helmClient.Rollback(name, newRevision, hooks)
 		if err != nil {
 			return mcp.NewToolResultErrorf("failed to rollback release to revision %d: %v", newRevision, err), nil
 		}
@@ -108,13 +131,7 @@ func handlerHelmRollback(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 		}
 
 		result := HelmRollbackResult{
-			Rollback: helm.RollbackResult{
-				Name:             name,
-				Namespace:        namespace,
-				PreviousRevision: previousRevision,
-				NewRevision:      afterRollback.Revision,
-				Status:           afterRollback.Status,
-			},
+			NewRevision: afterRollback.Version,
 		}
 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil

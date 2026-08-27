@@ -30,7 +30,7 @@ import (
 
 // HelmListResult represents the result of listing Helm releases.
 type HelmListResult struct {
-	Releases []helm.ReleaseSummary `json:"releases" jsonschema:"List of Helm releases"`
+	Releases []ReleaseSummary `json:"releases" jsonschema:"List of Helm releases"`
 }
 
 // RegisterHelmList adds the helm_list tool, which lists Helm releases in a namespace.
@@ -90,7 +90,11 @@ func handlerHelmList(mc *k8s.MultiClusterClient) func(ctx context.Context, req m
 		}
 
 		result := HelmListResult{
-			Releases: releases,
+			Releases: make([]ReleaseSummary, 0, len(releases)),
+		}
+
+		for _, r := range releases {
+			result.Releases = append(result.Releases, toHelmSummary(&r))
 		}
 
 		// Build fallback text
