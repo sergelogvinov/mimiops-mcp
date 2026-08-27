@@ -28,8 +28,23 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// ContainerUsage holds the current resource usage of one container from the metrics API.
+type ContainerUsage struct {
+	Name   string `json:"name" jsonschema:"Name of the container"`
+	CPU    string `json:"cpu" jsonschema:"Current CPU usage (millicores)"`
+	Memory string `json:"memory" jsonschema:"Current memory usage"`
+}
+
+// PodUsage holds the current resource usage of a pod from the metrics API.
+type PodUsage struct {
+	CPU        string           `json:"cpu" jsonschema:"Current CPU usage (millicores)"`
+	Memory     string           `json:"memory" jsonschema:"Current memory usage"`
+	Containers []ContainerUsage `json:"containers,omitempty" jsonschema:"Per-container usage"`
+}
 
 // PodDescribeResult represents the result of describing a pod.
 type PodDescribeResult struct {
@@ -40,6 +55,7 @@ type PodDescribeResult struct {
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 
 	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"Conditions"`
+	Usage      *PodUsage       `json:"usage,omitempty" jsonschema:"Current resource usage from the metrics API"`
 	Events     []EventSummary  `json:"events,omitempty" jsonschema:"List of events"`
 }
 
@@ -50,7 +66,7 @@ func RegisterPodsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("Describe Pod"),
-		mcp.WithDescription("Pod summary (conditions, container statuses, node, tolerations)"),
+		mcp.WithDescription("Pod summary (conditions, container statuses, current usage, node, tolerations)"),
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[PodDescribeResult](),
@@ -99,6 +115,50 @@ func handlerPodsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 	}
 }
 
+// fetchPodUsage fetches the pod's current resource usage from the metrics API.
+// It returns nil when the metrics API is unavailable (e.g., no metrics-server),
+// so the describe result degrades gracefully without usage data.
+func fetchPodUsage(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodUsage {
+	log := logger.FromContext(ctx)
+
+	metricsClient, err := client.Metrics()
+	if err != nil {
+		log.DebugContext(ctx, "failed to create metrics client", "pod", pod.Name, "err", err)
+		return nil
+	}
+
+	podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+	if err != nil {
+		// The metrics API is optional; NotFound usually means metrics-server is not installed.
+		log.DebugContext(ctx, "pod metrics not available", "pod", pod.Name, "err", err)
+		return nil
+	}
+
+	usage := &PodUsage{
+		Containers: make([]ContainerUsage, 0, len(podMetrics.Containers)),
+	}
+
+	var cpu, mem resource.Quantity
+	for _, c := range podMetrics.Containers {
+		cu := ContainerUsage{Name: c.Name}
+		if q, ok := c.Usage[corev1.ResourceCPU]; ok {
+			cu.CPU = fmt.Sprintf("%dm", q.MilliValue())
+			cpu.Add(q)
+		}
+		if q, ok := c.Usage[corev1.ResourceMemory]; ok {
+			cu.Memory = q.String()
+			mem.Add(q)
+		}
+
+		usage.Containers = append(usage.Containers, cu)
+	}
+
+	usage.CPU = fmt.Sprintf("%dm", cpu.MilliValue())
+	usage.Memory = mem.String()
+
+	return usage
+}
+
 // buildPodDescribeResult builds a PodDescribeResult from a Pod.
 func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodDescribeResult {
 	result := &PodDescribeResult{
@@ -107,6 +167,7 @@ func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1
 		Annotations: extractAnnotations(pod.Annotations),
 		Labels:      extractLabels(pod.Labels),
 		Conditions:  toPodConditionInfo(pod),
+		Usage:       fetchPodUsage(ctx, client, pod),
 	}
 
 	result.PodSummary.OwnerReferences, _ = ownerReferences(ctx, client, pod) //nolint:errcheck

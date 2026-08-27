@@ -173,7 +173,7 @@ require (
     k8s.io/api v0.35.0                       // K8s API types
     k8s.io/apimachinery v0.35.0              // API machinery
     k8s.io/client-go v0.35.0                 // typed clientset
-    k8s.io/metrics v0.35.0                   // metrics (pods_top / nodes_top, optional)
+    k8s.io/metrics v0.36.4                   // metrics (current usage in nodes_describe/pods_describe, optional)
     helm.sh/helm/v3 v3.21.3                  // Helm SDK (Go library, no binary)
     github.com/spf13/pflag v1.0.10           // Flags
     github.com/spf13/cobra v1.10.2           // CLI command dispatch
@@ -314,7 +314,7 @@ Legend: **R** read-only, **D** destructive (registered only when `--allow-destru
 
 #### `pods_describe`
 
-- **output schema** `PodDescribeResult` — rich summary: status, phase, conditions, container states, node, recent events (fetched via `events_list` core filtered by pod UID).
+- `pods_describe` (R) — rich summary: status, phase, conditions, container states, current usage (metrics API, omitted without metrics-server), node, recent events (fetched via `events_list` core filtered by pod UID).
 - **params** `name` (required), `namespace` (required).
 
 #### `pods_log`
@@ -368,7 +368,7 @@ All read-only, registered unconditionally. The `--namespace` flag scopes the nam
 | -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `nodes_list` (R)           | `NodeListResult` → `[]NodeSummary`   | `include_allocations` (bool, opt, default false) computes per-node CPU/mem request & limit sums from pods; shown `request/allocatable` |
 | `nodes_get` (R)            | `NodeResult`                         | Always computes allocated-resource totals; `include_pods` (bool, opt, default false) adds pod summary (capped at 15)                   |
-| `nodes_describe` (R)       | `NodeDescribeResult`                 | conditions, addresses, taints, allocated resources (`used (percent%)`), pods (capped at 20), events                                   |
+| `nodes_describe` (R)       | `NodeDescribeResult`                 | conditions, addresses, taints, allocated resources (`used (percent%)`), current usage (metrics API, omitted without metrics-server), pods (capped at 20), events                                   |
 | `namespaces_list` (R)      | `NamespaceListResult`                | `status`, `age`                                                                                                                        |
 | `namespaces_get` (R)       | `NamespaceResult`                    | full `v1.Namespace`                                                                                                                   |
 | `namespaces_describe` (R)  | `NamespaceDescribeResult`            | includes the namespace's ResourceQuotas (`resource/used/hard` rows) and LimitRanges (typed `spec.limits`)                              |

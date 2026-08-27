@@ -18,10 +18,13 @@ limitations under the License.
 package k8s
 
 import (
+	"sync"
+
 	"github.com/sergelogvinov/mimiops-mcp/internal/utils"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 // Client is a Kubernetes clientset plus the resolved identity of the active
@@ -32,6 +35,10 @@ type Client struct {
 	configFlags *genericclioptions.ConfigFlags
 	restConfig  *rest.Config
 	sanitizer   *utils.Sanitizer
+
+	metricsOnce sync.Once
+	metrics     metricsclientset.Interface
+	metricsErr  error
 
 	// ContextName is the resolved active context (from --context or current-context).
 	ContextName string
@@ -65,6 +72,23 @@ func (c *Client) ToRawKubeConfigLoader() *genericclioptions.ConfigFlags {
 // RESTConfig returns the underlying rest.Config for k8s client creation.
 func (c *Client) RESTConfig() *rest.Config {
 	return c.restConfig
+}
+
+// Metrics returns the metrics.k8s.io clientset for the cluster, created lazily.
+// The metrics API is optional (it requires metrics-server); callers must handle
+// request-time errors such as NotFound when it is not served.
+func (c *Client) Metrics() (metricsclientset.Interface, error) {
+	c.metricsOnce.Do(func() {
+		client, err := metricsclientset.NewForConfig(c.restConfig)
+		if err != nil {
+			c.metricsErr = err
+			return
+		}
+
+		c.metrics = client
+	})
+
+	return c.metrics, c.metricsErr
 }
 
 // Sanitizer returns the log sanitizer for masking sensitive values in logs.

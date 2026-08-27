@@ -32,6 +32,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// NodeUsage holds the current resource usage of a node from the metrics API.
+type NodeUsage struct {
+	CPU           string `json:"cpu" jsonschema:"Current CPU usage"`
+	CPUPercent    string `json:"cpu_percent" jsonschema:"CPU usage percentage of allocatable"`
+	Memory        string `json:"memory" jsonschema:"Current memory usage"`
+	MemoryPercent string `json:"memory_percent" jsonschema:"Memory usage percentage of allocatable"`
+}
+
 // NodeDescribeResult represents the result of describing a node.
 type NodeDescribeResult struct {
 	NodeSummary
@@ -43,6 +51,7 @@ type NodeDescribeResult struct {
 	Addresses          []NodeAddressInfo `json:"addresses,omitempty" jsonschema:"Node addresses"`
 	Conditions         []ConditionInfo   `json:"conditions,omitempty" jsonschema:"List of conditions"`
 	AllocatedResources NodeAllocations   `json:"allocated_resources" jsonschema:"Allocated resources (requests and limits vs allocatable)"`
+	Usage              *NodeUsage        `json:"usage,omitempty" jsonschema:"Current resource usage from the metrics API"`
 	Pods               []NodePodInfo     `json:"pods,omitempty" jsonschema:"Pods running on the node (capped at 20)"`
 	Events             []EventSummary    `json:"events,omitempty" jsonschema:"List of events"`
 }
@@ -54,7 +63,7 @@ func RegisterNodesDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("Describe Node"),
-		mcp.WithDescription("Node summary (conditions, addresses, taints, allocated resources, pods, events)"),
+		mcp.WithDescription("Node summary (conditions, addresses, taints, allocated resources, current usage, pods, events)"),
 		mcp.WithString("name", mcp.Description("node name"), mcp.Required()),
 		mcp.WithOutputSchema[NodeDescribeResult](),
 	}, clusters.ClusterOptions(mc)...)
@@ -113,6 +122,7 @@ func buildNodeDescribeResult(ctx context.Context, client *k8s.Client, node *core
 		Addresses:          extractNodeAddresses(node.Status.Addresses),
 		Conditions:         toNodeConditionInfo(node),
 		AllocatedResources: computeNodeAllocations(node, pods),
+		Usage:              fetchNodeUsage(ctx, client, node),
 		Pods:               toNodePodInfoList(pods, 20),
 	}
 
@@ -145,6 +155,38 @@ func buildNodeDescribeResult(ctx context.Context, client *k8s.Client, node *core
 	}
 
 	return result
+}
+
+// fetchNodeUsage fetches the node's current resource usage from the metrics API.
+// It returns nil when the metrics API is unavailable (e.g., no metrics-server),
+// so the describe result degrades gracefully without usage data.
+func fetchNodeUsage(ctx context.Context, client *k8s.Client, node *corev1.Node) *NodeUsage {
+	log := logger.FromContext(ctx)
+
+	metricsClient, err := client.Metrics()
+	if err != nil {
+		log.DebugContext(ctx, "failed to create metrics client", "node", node.Name, "err", err)
+		return nil
+	}
+
+	nodeMetrics, err := metricsClient.MetricsV1beta1().NodeMetricses().Get(ctx, node.Name, metav1.GetOptions{})
+	if err != nil {
+		// The metrics API is optional; NotFound usually means metrics-server is not installed.
+		log.DebugContext(ctx, "node metrics not available", "node", node.Name, "err", err)
+		return nil
+	}
+
+	usage := &NodeUsage{}
+	if q, ok := nodeMetrics.Usage[corev1.ResourceCPU]; ok {
+		usage.CPU = fmt.Sprintf("%dm", q.MilliValue())
+		usage.CPUPercent = quantityPercent(&q, node.Status.Allocatable.Cpu())
+	}
+	if q, ok := nodeMetrics.Usage[corev1.ResourceMemory]; ok {
+		usage.Memory = q.String()
+		usage.MemoryPercent = quantityPercent(&q, node.Status.Allocatable.Memory())
+	}
+
+	return usage
 }
 
 // computeNodeAllocations sums pod requests and limits on the node and expresses
