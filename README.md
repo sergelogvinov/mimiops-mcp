@@ -38,6 +38,7 @@ Core tools are always registered. The names below are the MCP tool names exposed
 - Resource configuration: `resourcequotas_list`, `resourcequotas_describe`, `limitranges_list`, `limitranges_describe`, `storageclasses_list`, `persistentvolumeclaims_list`, `persistentvolumeclaims_describe`, `priorityclasses_list`.
 - Events: `events_get`.
 - Workloads (Deployments, StatefulSets, and DaemonSets): `workloads_list`, `workloads_get`, `workloads_describe`.
+- Autoscaling: `hpa_list`, `hpa_describe`.
 - Services: `services_list`, `services_describe`.
 
 The following additional recovery tools are registered only when `--allow-destructive` is enabled:

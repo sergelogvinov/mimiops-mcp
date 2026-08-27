@@ -111,7 +111,9 @@ mimiops/
 │   │   ├── pods_delete.go       # pods_delete (destructive)
 │   │   ├── workloads_list.go    # workloads_list
 │   │   ├── workloads_get.go     # workloads_get
-│   │   ├── workloads_describe.go# workloads_describe
+│   │   ├── workloads_describe.go # workloads_describe
+│   │   ├── hpa_list.go          # hpa_list
+│   │   ├── hpa_describe.go     # hpa_describe
 │   │   ├── workloads_resolve.go # shared kind-resolution helper (not a tool)
 │   │   ├── workloads_scale.go   # workloads_scale (destructive)
 │   │   ├── jobs_list.go         # jobs_list
@@ -334,6 +336,8 @@ All four workload tools accept `kind` as **optional**. When omitted, `resolveWor
 - `workloads_get` (R) — `WorkloadResult` → full `apps/v1` object (`Deployment`/`StatefulSet`/`DaemonSet`).
 - `workloads_describe` (R) — rich summary: replicas, conditions, selector, strategy, update history.
 - `workloads_scale` (D) — `Scale` object (`kind`, `namespace`, `name`, `replicas`). Params: `name` (req), `namespace` (req), `replicas` (int, req, min 0), `kind` (opt, deployment|statefulset). DaemonSets cannot be scaled (no `spec.replicas`) → error. Uses the `scale` subresource (`UpdateScale`). **Single-phase, no `confirm`.**
+- `hpa_list` (R) — `HPAListResult` → `[]HPASummary{namespace, name, reference, targets, min_pods, max_pods, replicas, age}`. `namespace` opt (empty = all). `targets` is kubectl-style `current/target` per metric (e.g., `50%/80%`).
+- `hpa_describe` (R) — `HPADescribeResult` — summary + desired replicas, last scale time, behavior policies, conditions, events (capped at 50).
 
 ### 6.4 Jobs & CronJobs
 
@@ -680,7 +684,7 @@ subjects:
 ## 14. Final Tool Inventory (unique, non-parameterized)
 
 **Read-only (registered unconditionally):**
-cluster_name, pods_list, pods_get, pods_describe, pods_log, pods_top, workloads_list, workloads_get, workloads_describe, jobs_list, jobs_get, jobs_describe, jobs_log, cronjobs_list, cronjobs_get, cronjobs_describe, nodes_list, nodes_get, nodes_describe, namespaces_list, namespaces_get, namespaces_describe, resourcequotas_list, resourcequotas_get, resourcequotas_describe, limitranges_list, limitranges_describe, storageclasses_list, persistentvolumeclaims_list, persistentvolumeclaims_describe, priorityclasses_list, events_get, helm_list, helm_status
+cluster_name, pods_list, pods_get, pods_describe, pods_log, pods_top, workloads_list, workloads_get, workloads_describe, hpa_list, hpa_describe, jobs_list, jobs_get, jobs_describe, jobs_log, cronjobs_list, cronjobs_get, cronjobs_describe, nodes_list, nodes_get, nodes_describe, namespaces_list, namespaces_get, namespaces_describe, resourcequotas_list, resourcequotas_get, resourcequotas_describe, limitranges_list, limitranges_describe, storageclasses_list, persistentvolumeclaims_list, persistentvolumeclaims_describe, priorityclasses_list, events_get, helm_list, helm_status
 
 **Destructive (registered only with `--allow-destructive`, single-phase):**
 pods_delete, workloads_scale, cronjobs_suspend, cronjobs_resume, jobs_create, jobs_delete, rollout_restart, helm_rollback

@@ -38,8 +38,8 @@ type PVCDescribeResult struct {
 
 	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
-	Finalizers  []string          `json:"finalizers" jsonschema:"Finalizers"`
 
+	Finalizers  []string       `json:"finalizers" jsonschema:"Finalizers"`
 	AccessModes string         `json:"access_modes,omitempty" jsonschema:"Access modes of the PVC (e.g., RWO)"`
 	VolumeMode  string         `json:"volume_mode,omitempty" jsonschema:"Volume mode of the PVC (Filesystem or Block)"`
 	UsedBy      []string       `json:"used_by,omitempty" jsonschema:"Pods using the PVC"`

@@ -83,6 +83,18 @@ type PVCSummary struct {
 	Age          string `json:"age" jsonschema:"Age of the PVC"`
 }
 
+// HPASummary is the trimmed representation of a HorizontalPodAutoscaler used by hpa_list.
+type HPASummary struct {
+	Name      string `json:"name" jsonschema:"Name of the HPA"`
+	Namespace string `json:"namespace" jsonschema:"Namespace of the HPA"`
+	Reference string `json:"reference" jsonschema:"Scale target reference (kind/name)"`
+	Targets   string `json:"targets,omitempty" jsonschema:"Metric targets (current/target)"`
+	MinPods   int32  `json:"min_pods" jsonschema:"Minimum number of replicas"`
+	MaxPods   int32  `json:"max_pods" jsonschema:"Maximum number of replicas"`
+	Replicas  int32  `json:"replicas" jsonschema:"Current number of replicas"`
+	Age       string `json:"age" jsonschema:"Age of the HPA"`
+}
+
 // PriorityClassSummary is the trimmed representation of a priority class used by priorityclasses_list.
 type PriorityClassSummary struct {
 	Name          string `json:"name" jsonschema:"Name of the priority class"`
