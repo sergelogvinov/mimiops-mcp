@@ -35,7 +35,7 @@ Core tools are always registered. The names below are the MCP tool names exposed
 - CronJobs: `cronjobs_list`, `cronjobs_get`, `cronjobs_describe`.
 - Nodes: `nodes_list`, `nodes_get`, `nodes_describe`.
 - Namespaces: `namespaces_list`, `namespaces_describe`.
-- Resource configuration: `resourcequotas_list`, `resourcequotas_describe`, `limitranges_list`, `limitranges_describe`, `storageclasses_list`, `priorityclasses_list`.
+- Resource configuration: `resourcequotas_list`, `resourcequotas_describe`, `limitranges_list`, `limitranges_describe`, `storageclasses_list`, `persistentvolumeclaims_list`, `persistentvolumeclaims_describe`, `priorityclasses_list`.
 - Events: `events_get`.
 - Workloads (Deployments, StatefulSets, and DaemonSets): `workloads_list`, `workloads_get`, `workloads_describe`.
 - Services: `services_list`, `services_describe`.

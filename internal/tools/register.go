@@ -130,6 +130,8 @@ func registerCore(srv *server.MCPServer, mc *k8s.MultiClusterClient, allowDestru
 	RegisterLimitRangesList(srv, mc)
 	RegisterLimitRangesDescribe(srv, mc)
 	RegisterStorageClassesList(srv, mc)
+	RegisterPersistentVolumeClaimsList(srv, mc)
+	RegisterPersistentVolumeClaimsDescribe(srv, mc)
 	RegisterPriorityClassesList(srv, mc)
 	RegisterEventsGet(srv, mc)
 	RegisterWorkloadsList(srv, mc)

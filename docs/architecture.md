@@ -138,6 +138,8 @@ mimiops/
 │   │   ├── limitranges_list.go    # limitranges_list
 │   │   ├── limitranges_describe.go # limitranges_describe
 │   │   ├── storageclasses_list.go # storageclasses_list
+│   │   ├── persistentvolumeclaims_list.go # persistentvolumeclaims_list
+│   │   ├── persistentvolumeclaims_describe.go # persistentvolumeclaims_describe
 │   │   ├── priorityclasses_list.go # priorityclasses_list
 │   │   ├── events.go            # events_list, events_get
 │   │   ├── helm_list.go         # helm_list
@@ -371,7 +373,9 @@ All read-only, registered unconditionally. The `--namespace` flag scopes the nam
 | `resourcequotas_describe` (R) | `ResourceQuotaDescribeResult`     | summary + `resource/used/hard` rows per resource                                                                                       |
 | `limitranges_list` (R)     | `LimitRangeListResult`               | `namespace, name, types, age`                                                                                                          |
 | `limitranges_describe` (R) | `LimitRangeDescribeResult`           | typed `spec.limits[]` with `min/max/default/defaultRequest/maxLimitRequestRatio` per type                                                |
-| `storageclasses_list` (R)  | `StorageClassListResult`             | `provisioner, reclaim_policy, volume_binding_mode, allow_volume_expansion, age`                                                        |
+| `storageclasses_list` (R)  | `StorageClassListResult`              | `provisioner, reclaim_policy, volume_binding_mode, allow_volume_expansion, age`                                                        |
+| `persistentvolumeclaims_list` (R) | `PersistentVolumeClaimsListResult` | `namespace, name, status, volume, capacity, storageclass, age`; `namespace` opt (empty = all)                                        |
+| `persistentvolumeclaims_describe` (R) | `PVCDescribeResult`          | access modes (`RWO`), volume mode, finalizers, pods using the PVC, events (capped at 50)                                              |
 | `priorityclasses_list` (R) | `PriorityClassListResult`            | `value, global_default, description, age`                                                                                              |
 | `events_get` (R)           | `EventListResult` → `[]EventSummary` | warnings first then `lastTimestamp` desc; `namespace`, `field_selector`, `limit` (default 50, max 500)                                 |
 
@@ -676,7 +680,7 @@ subjects:
 ## 14. Final Tool Inventory (unique, non-parameterized)
 
 **Read-only (registered unconditionally):**
-cluster_name, pods_list, pods_get, pods_describe, pods_log, pods_top, workloads_list, workloads_get, workloads_describe, jobs_list, jobs_get, jobs_describe, jobs_log, cronjobs_list, cronjobs_get, cronjobs_describe, nodes_list, nodes_get, nodes_describe, namespaces_list, namespaces_get, namespaces_describe, resourcequotas_list, resourcequotas_get, resourcequotas_describe, limitranges_list, limitranges_describe, storageclasses_list, priorityclasses_list, events_get, helm_list, helm_status
+cluster_name, pods_list, pods_get, pods_describe, pods_log, pods_top, workloads_list, workloads_get, workloads_describe, jobs_list, jobs_get, jobs_describe, jobs_log, cronjobs_list, cronjobs_get, cronjobs_describe, nodes_list, nodes_get, nodes_describe, namespaces_list, namespaces_get, namespaces_describe, resourcequotas_list, resourcequotas_get, resourcequotas_describe, limitranges_list, limitranges_describe, storageclasses_list, persistentvolumeclaims_list, persistentvolumeclaims_describe, priorityclasses_list, events_get, helm_list, helm_status
 
 **Destructive (registered only with `--allow-destructive`, single-phase):**
 pods_delete, workloads_scale, cronjobs_suspend, cronjobs_resume, jobs_create, jobs_delete, rollout_restart, helm_rollback

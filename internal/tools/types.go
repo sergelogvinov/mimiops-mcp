@@ -72,6 +72,17 @@ type ResourceQuota struct {
 	Hard     string `json:"hard" jsonschema:"Hard limit"`
 }
 
+// PVCSummary is the trimmed representation of a PersistentVolumeClaim used by persistentvolumeclaims_list.
+type PVCSummary struct {
+	Name         string `json:"name" jsonschema:"Name of the PVC"`
+	Namespace    string `json:"namespace" jsonschema:"Namespace of the PVC"`
+	Status       string `json:"status" jsonschema:"Status of the PVC (Pending, Bound, or Lost)"`
+	Volume       string `json:"volume,omitempty" jsonschema:"Volume bound to the PVC"`
+	Capacity     string `json:"capacity,omitempty" jsonschema:"Capacity of the PVC"`
+	StorageClass string `json:"storageclass,omitempty" jsonschema:"StorageClass of the PVC"`
+	Age          string `json:"age" jsonschema:"Age of the PVC"`
+}
+
 // PriorityClassSummary is the trimmed representation of a priority class used by priorityclasses_list.
 type PriorityClassSummary struct {
 	Name          string `json:"name" jsonschema:"Name of the priority class"`
