@@ -220,6 +220,7 @@ func extractLabels(labels map[string]string) map[string]string {
 		"job-name",
 		"controller-uid",
 		"statefulset.kubernetes.io/pod-name",
+		"apps.kubernetes.io/pod-index",
 		"batch.kubernetes.io/controller-uid",
 		"app.kubernetes.io/version",
 	}
