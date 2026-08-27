@@ -112,7 +112,17 @@ type NodeSummary struct {
 	Age            string   `json:"age" jsonschema:"Age of the node"`
 	KubeletVersion string   `json:"kubelet_version" jsonschema:"Kubelet version of the node"`
 	ImageVersion   string   `json:"image_version" jsonschema:"OS image version of the node"`
-	InternalIP     string   `json:"internal_ip" jsonschema:"Internal IP address of the node"`
+	InternalIPs    string   `json:"internal_ips" jsonschema:"Internal IP addresses of the node"`
+}
+
+// NodeAllocations holds computed resource allocations for a node.
+type NodeAllocations struct {
+	RequestsCPU       string `json:"requests_cpu" jsonschema:"CPU requests (used/allocatable)"`
+	RequestsMemory    string `json:"requests_memory" jsonschema:"Memory requests (used/allocatable)"`
+	LimitsCPU         string `json:"limits_cpu" jsonschema:"CPU limits (used/allocatable)"`
+	LimitsMemory      string `json:"limits_memory" jsonschema:"Memory limits (used/allocatable)"`
+	AllocatableCPU    string `json:"allocatable_cpu" jsonschema:"Allocatable CPU"`
+	AllocatableMemory string `json:"allocatable_memory" jsonschema:"Allocatable memory"`
 }
 
 // NodeSpec is the trimmed representation of a node spec used by nodes_get.

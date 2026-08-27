@@ -98,6 +98,23 @@ func handlerLimitRangesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Con
 
 // buildLimitRangeDescribeResult builds a LimitRangeDescribeResult from a LimitRange.
 func buildLimitRangeDescribeResult(lr *corev1.LimitRange) *LimitRangeDescribeResult {
+	return &LimitRangeDescribeResult{
+		LimitRangeSummary: LimitRangeSummary{
+			Name:      lr.Name,
+			Namespace: lr.Namespace,
+			Types:     deriveLimitRangeTypes(lr),
+			Age:       formatAge(lr.CreationTimestamp),
+		},
+		Annotations: extractAnnotations(lr.Annotations),
+		Labels:      extractLabels(lr.Labels),
+		Spec: LimitRangeSpec{
+			Limits: toLimitRangeLimits(lr),
+		},
+	}
+}
+
+// toLimitRangeLimits converts a LimitRange's spec.limits to the typed representation.
+func toLimitRangeLimits(lr *corev1.LimitRange) []LimitRangeLimit {
 	limits := make([]LimitRangeLimit, 0, len(lr.Spec.Limits))
 	for _, limit := range lr.Spec.Limits {
 		limits = append(limits, LimitRangeLimit{
@@ -110,19 +127,7 @@ func buildLimitRangeDescribeResult(lr *corev1.LimitRange) *LimitRangeDescribeRes
 		})
 	}
 
-	return &LimitRangeDescribeResult{
-		LimitRangeSummary: LimitRangeSummary{
-			Name:      lr.Name,
-			Namespace: lr.Namespace,
-			Types:     deriveLimitRangeTypes(lr),
-			Age:       formatAge(lr.CreationTimestamp),
-		},
-		Annotations: extractAnnotations(lr.Annotations),
-		Labels:      extractLabels(lr.Labels),
-		Spec: LimitRangeSpec{
-			Limits: limits,
-		},
-	}
+	return limits
 }
 
 // resourceListToStringMap converts a corev1.ResourceList to a map of quantity strings.

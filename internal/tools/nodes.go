@@ -26,6 +26,8 @@ import (
 
 // toNodeSummary converts a node to a NodeSummary.
 func toNodeSummary(node *corev1.Node) NodeSummary {
+	ips := getInternalIP(node)
+
 	return NodeSummary{
 		Name:           node.Name,
 		Status:         deriveNodeStatus(node),
@@ -33,7 +35,7 @@ func toNodeSummary(node *corev1.Node) NodeSummary {
 		Age:            formatAge(node.CreationTimestamp),
 		KubeletVersion: node.Status.NodeInfo.KubeletVersion,
 		ImageVersion:   node.Status.NodeInfo.OSImage,
-		InternalIP:     getInternalIP(node),
+		InternalIPs:    strings.Join([]string{ips}, ","),
 		NodeCapacityInfo: NodeCapacityInfo{
 			CPU:    node.Status.Capacity.Cpu().String(),
 			Memory: node.Status.Capacity.Memory().String(),
@@ -192,5 +194,20 @@ func extractNodeLabels(labels map[string]string) map[string]string {
 		result[k] = v
 	}
 
+	return result
+}
+
+func extractNodeAddresses(addresses []corev1.NodeAddress) []NodeAddressInfo {
+	result := make([]NodeAddressInfo, 0, len(addresses))
+	for _, addr := range addresses {
+		if addr.Type != corev1.NodeInternalIP {
+			continue
+		}
+
+		result = append(result, NodeAddressInfo{
+			Type:    string(addr.Type),
+			Address: addr.Address,
+		})
+	}
 	return result
 }

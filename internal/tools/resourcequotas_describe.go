@@ -105,18 +105,25 @@ func buildResourceQuotaDescribeResult(quota *corev1.ResourceQuota) *ResourceQuot
 			Namespace: quota.Namespace,
 			Age:       formatAge(quota.CreationTimestamp),
 		},
+		ResourceQuotas: extractResourceQuotas(quota),
 	}
+
+	return &result
+}
+
+func extractResourceQuotas(quota *corev1.ResourceQuota) []ResourceQuota {
+	resourceQuotas := make([]ResourceQuota, 0, len(quota.Status.Hard))
 
 	usedStatus := quota.Status.Used
 
 	for resourceName, hardLimit := range quota.Status.Hard {
 		usedValue := usedStatus[resourceName]
-		result.ResourceQuotas = append(result.ResourceQuotas, ResourceQuota{
+		resourceQuotas = append(resourceQuotas, ResourceQuota{
 			Resource: string(resourceName),
 			Used:     usedValue.String(),
 			Hard:     hardLimit.String(),
 		})
 	}
 
-	return &result
+	return resourceQuotas
 }

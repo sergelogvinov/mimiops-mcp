@@ -105,20 +105,12 @@ func handlerNodesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, 
 
 // buildNodeDescribeResult builds a NodeDescribeResult from a Node and its pods.
 func buildNodeDescribeResult(ctx context.Context, client *k8s.Client, node *corev1.Node, pods []corev1.Pod) *NodeDescribeResult {
-	addresses := make([]NodeAddressInfo, 0, len(node.Status.Addresses))
-	for _, addr := range node.Status.Addresses {
-		addresses = append(addresses, NodeAddressInfo{
-			Type:    string(addr.Type),
-			Address: addr.Address,
-		})
-	}
-
 	result := &NodeDescribeResult{
 		NodeSummary:        toNodeSummary(node),
 		NodeSpec:           toNodeSpec(node),
 		Annotations:        extractNodeAnnotations(node.Annotations),
 		Labels:             extractNodeLabels(node.Labels),
-		Addresses:          addresses,
+		Addresses:          extractNodeAddresses(node.Status.Addresses),
 		Conditions:         toNodeConditionInfo(node),
 		AllocatedResources: computeNodeAllocations(node, pods),
 		Pods:               toNodePodInfoList(pods, 20),
