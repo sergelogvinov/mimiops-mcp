@@ -128,12 +128,14 @@ mimiops/
 │   │   ├── rollout.go           # rollout_restart (destructive)
 │   │   ├── nodes_list.go        # nodes_list
 │   │   ├── nodes_get.go         # nodes_get
+│   │   ├── nodes_describe.go    # nodes_describe
 │   │   ├── namespaces_list.go   # namespaces_list
 │   │   ├── namespaces_get.go    # namespaces_get
 │   │   ├── resourcequotas_list.go # resourcequotas_list
 │   │   ├── resourcequotas_get.go  # resourcequotas_get
+│   │   ├── resourcequotas_describe.go # resourcequotas_describe
 │   │   ├── limitranges_list.go    # limitranges_list
-│   │   ├── limitranges_get.go     # limitranges_get
+│   │   ├── limitranges_describe.go # limitranges_describe
 │   │   ├── storageclasses_list.go # storageclasses_list
 │   │   ├── priorityclasses_list.go # priorityclasses_list
 │   │   ├── events.go            # events_list, events_get
@@ -359,12 +361,14 @@ All read-only, registered unconditionally. The `--namespace` flag scopes the nam
 | -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `nodes_list` (R)           | `NodeListResult` → `[]NodeSummary`   | `include_allocations` (bool, opt, default false) computes per-node CPU/mem request & limit sums from pods; shown `request/allocatable` |
 | `nodes_get` (R)            | `NodeResult`                         | Always computes allocated-resource totals; `include_pods` (bool, opt, default false) adds pod summary (capped at 15)                   |
+| `nodes_describe` (R)       | `NodeDescribeResult`                 | conditions, addresses, taints, allocated resources (`used (percent%)`), pods (capped at 20), events                                   |
 | `namespaces_list` (R)      | `NamespaceListResult`                | `status`, `age`                                                                                                                        |
 | `namespaces_get` (R)       | `NamespaceResult`                    | full `v1.Namespace`                                                                                                                    |
 | `resourcequotas_list` (R)  | `ResourceQuotaListResult`            | `used/hard` per `requests.cpu/memory`, `limits.cpu/memory`, `age`                                                                      |
 | `resourcequotas_get` (R)   | `ResourceQuotaResult`                | every `spec.hard` + `status.used`, conditions                                                                                          |
+| `resourcequotas_describe` (R) | `ResourceQuotaDescribeResult`     | summary + kubectl-style `Resource/Used/Hard` table (`rows` + pre-rendered `table`)                                                     |
 | `limitranges_list` (R)     | `LimitRangeListResult`               | `namespace, name, types, age`                                                                                                          |
-| `limitranges_get` (R)      | `LimitRangeResult`                   | per-`limits[]` min/max/default/maxLimitRequestRatio                                                                                    |
+| `limitranges_describe` (R) | `LimitRangeDescribeResult`           | typed `spec.limits[]` with `min/max/default/defaultRequest/maxLimitRequestRatio` per type                                                |
 | `storageclasses_list` (R)  | `StorageClassListResult`             | `provisioner, reclaim_policy, volume_binding_mode, allow_volume_expansion, age`                                                        |
 | `priorityclasses_list` (R) | `PriorityClassListResult`            | `value, global_default, description, age`                                                                                              |
 | `events_get` (R)           | `EventListResult` → `[]EventSummary` | warnings first then `lastTimestamp` desc; `namespace`, `field_selector`, `limit` (default 50, max 500)                                 |
@@ -670,7 +674,7 @@ subjects:
 ## 14. Final Tool Inventory (unique, non-parameterized)
 
 **Read-only (registered unconditionally):**
-cluster_name, pods_list, pods_get, pods_describe, pods_log, pods_top, workloads_list, workloads_get, workloads_describe, jobs_list, jobs_get, jobs_describe, jobs_log, cronjobs_list, cronjobs_get, cronjobs_describe, nodes_list, nodes_get, namespaces_list, namespaces_get, resourcequotas_list, resourcequotas_get, limitranges_list, limitranges_get, storageclasses_list, priorityclasses_list, events_get, helm_list, helm_status
+cluster_name, pods_list, pods_get, pods_describe, pods_log, pods_top, workloads_list, workloads_get, workloads_describe, jobs_list, jobs_get, jobs_describe, jobs_log, cronjobs_list, cronjobs_get, cronjobs_describe, nodes_list, nodes_get, nodes_describe, namespaces_list, namespaces_get, resourcequotas_list, resourcequotas_get, resourcequotas_describe, limitranges_list, limitranges_describe, storageclasses_list, priorityclasses_list, events_get, helm_list, helm_status
 
 **Destructive (registered only with `--allow-destructive`, single-phase):**
 pods_delete, workloads_scale, cronjobs_suspend, cronjobs_resume, jobs_create, jobs_delete, rollout_restart, helm_rollback

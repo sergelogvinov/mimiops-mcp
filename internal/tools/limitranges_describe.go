@@ -30,34 +30,35 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// LimitRangeGetResult represents the result of getting a LimitRange.
-type LimitRangeGetResult struct {
+// LimitRangeDescribeResult represents the result of describing a LimitRange.
+type LimitRangeDescribeResult struct {
 	LimitRangeSummary
 
 	Annotations map[string]string `json:"annotations" jsonschema:"Annotations"`
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
-	Spec        map[string]any    `json:"spec" jsonschema:"Spec of the LimitRange"`
+
+	Spec LimitRangeSpec `json:"spec" jsonschema:"Spec of the LimitRange"`
 }
 
-// RegisterLimitRangesGet adds the limitranges_get tool, which gets a single LimitRange's full spec.
-func RegisterLimitRangesGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
+// RegisterLimitRangesDescribe adds the limitranges_describe tool, which describes a single LimitRange.
+func RegisterLimitRangesDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
-		mcp.WithToolTitle("Get LimitRange"),
-		mcp.WithDescription("Get a single LimitRange's full spec and status."),
+		mcp.WithToolTitle("Describe LimitRange"),
+		mcp.WithDescription("Describe a single LimitRange's full spec."),
 		mcp.WithString("name", mcp.Description("LimitRange name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace name"), mcp.Required()),
-		mcp.WithOutputSchema[LimitRangeGetResult](),
+		mcp.WithOutputSchema[LimitRangeDescribeResult](),
 	}, clusters.ClusterOptions(mc)...)
 
-	tool := mcp.NewTool("limitranges_get", opts...)
-	s.AddTool(tool, handlerLimitRangesGet(mc))
+	tool := mcp.NewTool("limitranges_describe", opts...)
+	s.AddTool(tool, handlerLimitRangesDescribe(mc))
 }
 
-// handlerLimitRangesGet returns a handler function for the limitranges_get tool.
-func handlerLimitRangesGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// handlerLimitRangesDescribe returns a handler function for the limitranges_describe tool.
+func handlerLimitRangesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		client, err := clusters.ResolveCluster(mc, req)
 		if err != nil {
@@ -75,7 +76,7 @@ func handlerLimitRangesGet(mc *k8s.MultiClusterClient) func(ctx context.Context,
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "limitranges_get called",
+		log.DebugContext(ctx, "limitranges_describe called",
 			"cluster", client.ClusterName,
 			"namespace", namespace,
 			"name", name,
@@ -90,14 +91,26 @@ func handlerLimitRangesGet(mc *k8s.MultiClusterClient) func(ctx context.Context,
 			return mcp.NewToolResultErrorf("failed to get limit range '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		result := buildLimitRangeGetResult(lr)
+		result := buildLimitRangeDescribeResult(lr)
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	}
 }
 
-// buildLimitRangeGetResult builds a LimitRangeGetResult from a LimitRange.
-func buildLimitRangeGetResult(lr *corev1.LimitRange) *LimitRangeGetResult {
-	result := &LimitRangeGetResult{
+// buildLimitRangeDescribeResult builds a LimitRangeDescribeResult from a LimitRange.
+func buildLimitRangeDescribeResult(lr *corev1.LimitRange) *LimitRangeDescribeResult {
+	limits := make([]LimitRangeLimit, 0, len(lr.Spec.Limits))
+	for _, limit := range lr.Spec.Limits {
+		limits = append(limits, LimitRangeLimit{
+			Type:                 string(limit.Type),
+			Min:                  resourceListToStringMap(limit.Min),
+			Max:                  resourceListToStringMap(limit.Max),
+			Default:              resourceListToStringMap(limit.Default),
+			DefaultRequest:       resourceListToStringMap(limit.DefaultRequest),
+			MaxLimitRequestRatio: resourceListToStringMap(limit.MaxLimitRequestRatio),
+		})
+	}
+
+	return &LimitRangeDescribeResult{
 		LimitRangeSummary: LimitRangeSummary{
 			Name:      lr.Name,
 			Namespace: lr.Namespace,
@@ -106,11 +119,22 @@ func buildLimitRangeGetResult(lr *corev1.LimitRange) *LimitRangeGetResult {
 		},
 		Annotations: extractAnnotations(lr.Annotations),
 		Labels:      extractLabels(lr.Labels),
-		Spec:        make(map[string]any),
+		Spec: LimitRangeSpec{
+			Limits: limits,
+		},
+	}
+}
+
+// resourceListToStringMap converts a corev1.ResourceList to a map of quantity strings.
+func resourceListToStringMap(rl corev1.ResourceList) map[string]string {
+	if len(rl) == 0 {
+		return nil
 	}
 
-	// Spec (simplified)
-	result.Spec["limits"] = lr.Spec.Limits
+	result := make(map[string]string, len(rl))
+	for name, qty := range rl {
+		result[string(name)] = qty.String()
+	}
 
 	return result
 }

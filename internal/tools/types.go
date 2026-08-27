@@ -39,6 +39,21 @@ type LimitRangeSummary struct {
 	Age       string `json:"age" jsonschema:"Age of the LimitRange"`
 }
 
+// LimitRangeLimit is one entry of a LimitRange's spec.limits.
+type LimitRangeLimit struct {
+	Type                 string            `json:"type" jsonschema:"Type of the limit (Container, Pod, or PersistentVolumeClaim)"`
+	Min                  map[string]string `json:"min,omitempty" jsonschema:"Min resource constraints"`
+	Max                  map[string]string `json:"max,omitempty" jsonschema:"Max resource constraints"`
+	Default              map[string]string `json:"default,omitempty" jsonschema:"Default resource constraints"`
+	DefaultRequest       map[string]string `json:"defaultRequest,omitempty" jsonschema:"Default request resource constraints"`
+	MaxLimitRequestRatio map[string]string `json:"maxLimitRequestRatio,omitempty" jsonschema:"Max limit to request ratio"`
+}
+
+// LimitRangeSpec is the trimmed representation of a LimitRange spec.
+type LimitRangeSpec struct {
+	Limits []LimitRangeLimit `json:"limits" jsonschema:"List of limits"`
+}
+
 // ResourceQuotaSummary is the trimmed representation of a resource quota used by resourcequotas_list.
 type ResourceQuotaSummary struct {
 	Name           string `json:"name" jsonschema:"Name of the resource quota"`
@@ -48,6 +63,13 @@ type ResourceQuotaSummary struct {
 	LimitsCPU      string `json:"limits_cpu,omitempty" jsonschema:"CPU limits (used/hard)"`
 	LimitsMemory   string `json:"limits_memory,omitempty" jsonschema:"Memory limits (used/hard)"`
 	Age            string `json:"age" jsonschema:"Age of the resource quota"`
+}
+
+// ResourceQuota is the representation of a resource quota's resources.
+type ResourceQuota struct {
+	Resource string `json:"resource" jsonschema:"Resource name"`
+	Used     string `json:"used" jsonschema:"Used quantity"`
+	Hard     string `json:"hard" jsonschema:"Hard limit"`
 }
 
 // PriorityClassSummary is the trimmed representation of a priority class used by priorityclasses_list.
@@ -104,6 +126,23 @@ type NodeCapacityInfo struct {
 	CPU    string `json:"cpu,omitempty" jsonschema:"CPU capacity of the node"`
 	Memory string `json:"memory,omitempty" jsonschema:"Memory capacity of the node"`
 	Pods   int    `json:"pods,omitempty" jsonschema:"Maximum number of pods the node can run"`
+}
+
+// NodeAddressInfo represents a node address.
+type NodeAddressInfo struct {
+	Type    string `json:"type" jsonschema:"Type of the address"`
+	Address string `json:"address" jsonschema:"Address"`
+}
+
+// NodePodInfo is a pod running on a node with its resource requests and limits.
+type NodePodInfo struct {
+	Namespace      string `json:"namespace" jsonschema:"Namespace of the pod"`
+	Name           string `json:"name" jsonschema:"Name of the pod"`
+	Phase          string `json:"phase" jsonschema:"Phase of the pod"`
+	CPURequests    string `json:"cpu_requests,omitempty" jsonschema:"CPU requests of the pod"`
+	CPULimits      string `json:"cpu_limits,omitempty" jsonschema:"CPU limits of the pod"`
+	MemoryRequests string `json:"memory_requests,omitempty" jsonschema:"Memory requests of the pod"`
+	MemoryLimits   string `json:"memory_limits,omitempty" jsonschema:"Memory limits of the pod"`
 }
 
 // WorkloadSummary is the trimmed, agent-friendly representation of a workload

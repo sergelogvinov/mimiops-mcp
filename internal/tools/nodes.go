@@ -133,8 +133,10 @@ func extractNodeAnnotations(annotations map[string]string) map[string]string {
 		"node.alpha.kubernetes.io/ttl",
 	}
 	ignoreKeysPrefix := []string{
+		"networking.talos.dev/",
 		"extensions.talos.dev/",
 		"talos.dev/owned",
+		"io.cilium.network.",
 	}
 
 	for k, v := range annotations {
