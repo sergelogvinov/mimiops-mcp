@@ -11,6 +11,9 @@ envFrom:
   - secretRef:
       name: oidc-secrets
 
+rbac:
+  create: true
+
 autoscaling:
   enabled: true
 

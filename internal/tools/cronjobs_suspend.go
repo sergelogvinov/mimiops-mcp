@@ -48,6 +48,8 @@ func RegisterCronJobsSuspend(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerCronJobsSuspend(mc))
 }
 
+// +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;patch
+
 // handlerCronJobsSuspend returns a handler function for the cronjobs_suspend tool.
 func handlerCronJobsSuspend(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

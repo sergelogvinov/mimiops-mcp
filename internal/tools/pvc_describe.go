@@ -65,6 +65,8 @@ func RegisterPersistentVolumeClaimsDescribe(s *server.MCPServer, mc *k8s.MultiCl
 	s.AddTool(tool, handlerPersistentVolumeClaimsDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch
+
 // handlerPersistentVolumeClaimsDescribe returns a handler function for the persistentvolumeclaims_describe tool.
 func handlerPersistentVolumeClaimsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -109,6 +111,8 @@ func handlerPersistentVolumeClaimsDescribe(mc *k8s.MultiClusterClient) func(ctx 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	}
 }
+
+// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch
 
 // buildPVCDescribeResult builds a PVCDescribeResult from a PersistentVolumeClaim and the pods
 // in its namespace.

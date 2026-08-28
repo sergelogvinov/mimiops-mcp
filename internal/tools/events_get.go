@@ -56,6 +56,8 @@ func RegisterEventsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerEventsGet(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch
+
 // handlerEventsGet returns a handler function for the events_get tool.
 func handlerEventsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

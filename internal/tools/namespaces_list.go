@@ -50,6 +50,8 @@ func RegisterNamespacesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerNamespacesList(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=list;watch
+
 // handlerNamespacesList returns a handler function for the namespaces_list tool.
 func handlerNamespacesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

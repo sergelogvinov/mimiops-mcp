@@ -58,6 +58,8 @@ func RegisterResourceQuotasDescribe(s *server.MCPServer, mc *k8s.MultiClusterCli
 	s.AddTool(tool, handlerResourceQuotasDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get
+
 // handlerResourceQuotasDescribe returns a handler function for the resourcequotas_describe tool.
 func handlerResourceQuotasDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

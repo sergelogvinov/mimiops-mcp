@@ -61,6 +61,9 @@ func RegisterServicesDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerServicesDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=services,verbs=get
+// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch
+
 // handlerServicesDescribe returns a handler function for the services_describe tool.
 func handlerServicesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -99,6 +102,9 @@ func handlerServicesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Contex
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	}
 }
+
+// +kubebuilder:rbac:groups="discovery.k8s.io",resources=endpointslices,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch
 
 // buildServiceDescribeResult builds a ServiceDescribeResult from a Service.
 func buildServiceDescribeResult(ctx context.Context, client *k8s.Client, svc *corev1.Service) *ServiceDescribeResult {

@@ -58,6 +58,9 @@ func RegisterLimitRangesDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient
 	s.AddTool(tool, handlerLimitRangesDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=limitranges,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=limitranges/status,verbs=get;list;watch
+
 // handlerLimitRangesDescribe returns a handler function for the limitranges_describe tool.
 func handlerLimitRangesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

@@ -50,6 +50,8 @@ func RegisterStorageClassesList(s *server.MCPServer, mc *k8s.MultiClusterClient)
 	s.AddTool(tool, handlerStorageClassesList(mc))
 }
 
+// +kubebuilder:rbac:groups="storage.k8s.io",resources=storageclasses,verbs=list;watch
+
 // handlerStorageClassesList returns a handler function for the storageclasses_list tool.
 func handlerStorageClassesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -61,7 +63,6 @@ func handlerStorageClassesList(mc *k8s.MultiClusterClient) func(ctx context.Cont
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "storageclasses_list called")
 
-		// List storage classes
 		classes, err := client.StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {

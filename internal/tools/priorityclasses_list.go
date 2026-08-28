@@ -50,6 +50,8 @@ func RegisterPriorityClassesList(s *server.MCPServer, mc *k8s.MultiClusterClient
 	s.AddTool(tool, handlerPriorityClassesList(mc))
 }
 
+// +kubebuilder:rbac:groups="scheduling.k8s.io",resources=priorityclasses,verbs=get;list;watch
+
 // handlerPriorityClassesList returns a handler function for the priorityclasses_list tool.
 func handlerPriorityClassesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

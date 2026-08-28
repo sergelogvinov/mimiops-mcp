@@ -69,6 +69,11 @@ func NewFluxClient(kclient *k8s.Client) (*Client, error) {
 	return &Client{client: c}, nil
 }
 
+// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=gitrepositories,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=get;list;watch;update
+
 // ListGitRepositories lists GitRepository resources, optionally scoped to a
 // namespace and filtered by label/field selectors.
 func (c *Client) ListGitRepositories(ctx context.Context, namespace, labelSelector, fieldSelector string) ([]SourceSummary, error) {

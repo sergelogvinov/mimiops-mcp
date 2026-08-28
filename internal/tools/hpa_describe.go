@@ -64,6 +64,8 @@ func RegisterHPADescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerHPADescribe(mc))
 }
 
+// +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get
+
 // handlerHPADescribe returns a handler function for the hpa_describe tool.
 func handlerHPADescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -102,6 +104,8 @@ func handlerHPADescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, re
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	}
 }
+
+// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch
 
 // buildHPADescribeResult builds an HPADescribeResult from a HorizontalPodAutoscaler.
 func buildHPADescribeResult(ctx context.Context, client *k8s.Client, hpa *autoscalingv2.HorizontalPodAutoscaler) *HPADescribeResult {

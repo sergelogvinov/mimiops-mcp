@@ -12,7 +12,6 @@ certs/
 bin/
 dist/
 bundle/
-hack/
 
 # Test binary, built with `go test -c`
 *.test

@@ -54,6 +54,8 @@ func RegisterPodsDelete(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerPodsDelete(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=pods,verbs=delete
+
 // handlerPodsDelete returns a handler function for the pods_delete tool.
 func handlerPodsDelete(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

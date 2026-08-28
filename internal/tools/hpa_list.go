@@ -57,6 +57,8 @@ func RegisterHPAList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerHPAList(mc))
 }
 
+// +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=list;watch
+
 // handlerHPAList returns a handler function for the hpa_list tool.
 func handlerHPAList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

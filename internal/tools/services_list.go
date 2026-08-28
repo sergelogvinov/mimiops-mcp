@@ -52,6 +52,8 @@ func RegisterServicesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerServicesList(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
+
 // handlerServicesList returns a handler function for the services_list tool.
 func handlerServicesList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

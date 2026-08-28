@@ -1,6 +1,6 @@
 # mimiops-mcp
 
-![Version: 0.0.1](https://img.shields.io/badge/Version-0.0.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v0.3.0](https://img.shields.io/badge/AppVersion-v0.3.0-informational?style=flat-square)
+![Version: 0.0.2](https://img.shields.io/badge/Version-0.0.2-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v0.3.0](https://img.shields.io/badge/AppVersion-v0.3.0-informational?style=flat-square)
 
 MimiOps is an opinionated MCP server for Kubernetes
 
@@ -31,8 +31,7 @@ MimiOps is an opinionated MCP server for Kubernetes
 | env | list | `[]` | Environment variables |
 | envFrom | object | `{}` | Environment variables from ConfigMaps or Secrets |
 | serviceAccount | object | `{"annotations":{},"automount":true,"create":true,"name":""}` | Pods Service Account. ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/ |
-| rbac | object | `{"create":false,"profile":"standard"}` | RBAC configuration ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/ |
-| rbac.profile | string | `"standard"` | This is to setup the RBAC rules for the service account can be: readonly, standard |
+| rbac | object | `{"create":false}` | RBAC configuration ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/ |
 | podAnnotations | object | `{}` | Annotations for pod. ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/ |
 | podlabels | object | `{}` | Extra labels for pod. ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/ |
 | podSecurityContext | object | `{"fsGroup":65532,"fsGroupChangePolicy":"OnRootMismatch","runAsGroup":65532,"runAsUser":65532}` | Pod Security Context. ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod |

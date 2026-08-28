@@ -74,6 +74,12 @@ func RegisterNamespacesDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient)
 	s.AddTool(tool, handlerNamespacesDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=resourcequotas/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=limitranges,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=limitranges/status,verbs=get;list;watch
+
 // handlerNamespacesDescribe returns a handler function for the namespaces_describe tool.
 func handlerNamespacesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

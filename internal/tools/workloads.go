@@ -28,6 +28,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get
+// +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get
+
 // resolveWorkloadKind returns the kind of the workload named `name` in `namespace`.
 // If `kind` is provided it is validated and returned directly.
 // Otherwise it probes deployment → statefulset → daemonset via typed Get.
@@ -100,6 +104,10 @@ func getWorkloadByKind(ctx context.Context, client *k8s.Client, namespace, name,
 		return nil, fmt.Errorf("invalid kind '%s'", kind)
 	}
 }
+
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=list
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=list
+// +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=list
 
 // listWorkloadsByKind lists workloads of a specific kind.
 func listWorkloadsByKind(ctx context.Context, client *k8s.Client, namespace, kind string, labelSelector string) (summaries []WorkloadSummary, err error) {

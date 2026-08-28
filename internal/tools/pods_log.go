@@ -53,6 +53,9 @@ func RegisterPodsLog(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerPodsLog(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
+
 // handlerPodsLog returns a handler function for the pods_log tool.
 func handlerPodsLog(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

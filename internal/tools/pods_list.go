@@ -52,6 +52,8 @@ func RegisterPodsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerPodsList(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+
 // handlerPodsList returns a handler function for the pods_list tool.
 func handlerPodsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

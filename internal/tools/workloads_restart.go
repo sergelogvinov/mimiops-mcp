@@ -145,6 +145,10 @@ func handlerWorkloadsRestart(mc *k8s.MultiClusterClient) func(ctx context.Contex
 	}
 }
 
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=patch
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=patch
+// +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=patch
+
 // restartWorkload triggers a rollout restart of a workload by patching the
 // restartedAt annotation in its pod template (same mechanism as kubectl rollout restart).
 func restartWorkload(ctx context.Context, client *k8s.Client, namespace, name, kind string) error {

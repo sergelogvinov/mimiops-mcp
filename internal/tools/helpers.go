@@ -31,6 +31,8 @@ import (
 
 const defaultContainerAnnotation = "kubectl.kubernetes.io/default-container"
 
+// +kubebuilder:rbac:groups="",resources=replicasets,verbs=get;list;watch
+
 // ownerReferences extracts the pod's owner references as simplified structs.
 // If an owner is a ReplicaSet, it fetches the ReplicaSet and returns its owner references
 // to get the actual workload (e.g., Deployment) that owns the pod.

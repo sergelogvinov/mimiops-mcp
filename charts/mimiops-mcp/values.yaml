@@ -59,10 +59,6 @@ rbac:
   # Specifies whether RBAC resources should be created.
   create: false
 
-  # -- This is to setup the RBAC rules for the service account
-  # can be: readonly, standard
-  profile: "standard"
-
 # -- Annotations for pod.
 # ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 podAnnotations: {}

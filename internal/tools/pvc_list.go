@@ -55,6 +55,8 @@ func RegisterPersistentVolumeClaimsList(s *server.MCPServer, mc *k8s.MultiCluste
 	s.AddTool(tool, handlerPersistentVolumeClaimsList(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch
+
 // handlerPersistentVolumeClaimsList returns a handler function for the persistentvolumeclaims_list tool.
 func handlerPersistentVolumeClaimsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

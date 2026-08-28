@@ -55,6 +55,11 @@ func RegisterJobsLog(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerJobsLog(mc))
 }
 
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get;list;watch
+
 // handlerJobsLog returns a handler function for the jobs_log tool.
 func handlerJobsLog(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

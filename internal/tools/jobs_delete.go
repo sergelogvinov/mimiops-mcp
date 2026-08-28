@@ -54,6 +54,8 @@ func RegisterJobsDelete(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerJobsDelete(mc))
 }
 
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=delete
+
 // handlerJobsDelete returns a handler function for the jobs_delete tool.
 func handlerJobsDelete(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

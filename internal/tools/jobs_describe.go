@@ -61,6 +61,10 @@ func RegisterJobsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerJobsDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+
 // handlerJobsDescribe returns a handler function for the jobs_describe tool.
 func handlerJobsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

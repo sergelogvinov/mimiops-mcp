@@ -49,6 +49,8 @@ func RegisterNodesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerNodesList(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=list;watch
+
 // handlerNodesList returns a handler function for the nodes_list tool.
 func handlerNodesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

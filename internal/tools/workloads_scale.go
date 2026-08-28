@@ -55,6 +55,9 @@ func RegisterWorkloadsScale(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerWorkloadsScale(mc))
 }
 
+// +kubebuilder:rbac:groups=apps,resources=deployments/scale,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=statefulsets/scale,verbs=get;update;patch
+
 // handlerWorkloadsScale returns the handler function for the workloads_scale tool.
 func handlerWorkloadsScale(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

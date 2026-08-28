@@ -56,6 +56,14 @@ func RegisterHelmStatus(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerHelmStatus(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups="",resources=deployments,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups="",resources=statefulsets,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups="",resources=daemonsets,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;update;patch
+
 // handlerHelmStatus returns a handler function for the helm_status tool.
 func handlerHelmStatus(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

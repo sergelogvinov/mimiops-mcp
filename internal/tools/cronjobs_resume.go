@@ -48,6 +48,8 @@ func RegisterCronJobsResume(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerCronJobsResume(mc))
 }
 
+// +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;patch
+
 // handlerCronJobsResume returns a handler function for the cronjobs_resume tool.
 func handlerCronJobsResume(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

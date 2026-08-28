@@ -68,6 +68,7 @@ clean: ## Clean
 
 .PHONY: tools
 tools:
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0
 	go install github.com/google/go-licenses@latest
 
 .PHONY: build ## Build
@@ -97,6 +98,10 @@ unit: ## Unit Tests
 
 .PHONY: test
 test: lint unit ## Run all tests
+
+.PHONY: manifests
+manifests: ## Generate Kubernetes manifests
+	controller-gen rbac:roleName=mimiops-mcp paths=./internal/tools/... output:rbac:artifacts:config=./docs/deploy
 
 .PHONY: install
 install: build

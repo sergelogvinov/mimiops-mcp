@@ -66,6 +66,10 @@ func RegisterWorkloadsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) 
 	s.AddTool(tool, handlerWorkloadsDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=deployments,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=statefulsets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=daemonsets,verbs=get;list;watch
+
 // handlerWorkloadsDescribe returns the handler function for the workloads_describe tool.
 func handlerWorkloadsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -116,6 +120,9 @@ func handlerWorkloadsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Conte
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	}
 }
+
+// +kubebuilder:rbac:groups="",resources=pods,verbs=list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=list;watch
 
 // buildWorkloadDescribeResult builds a WorkloadDescribeResult from a workload object.
 func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.Client) *WorkloadDescribeResult {

@@ -73,6 +73,9 @@ func RegisterNodesDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerNodesDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=nodes/status,verbs=get;list;watch
+
 // handlerNodesDescribe returns a handler function for the nodes_describe tool.
 func handlerNodesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -112,6 +115,8 @@ func handlerNodesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, 
 		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
 	}
 }
+
+// +kubebuilder:rbac:groups="",resources=events,verbs=list;watch
 
 // buildNodeDescribeResult builds a NodeDescribeResult from a Node and its pods.
 func buildNodeDescribeResult(ctx context.Context, client *k8s.Client, node *corev1.Node, pods []corev1.Pod) *NodeDescribeResult {
@@ -157,6 +162,9 @@ func buildNodeDescribeResult(ctx context.Context, client *k8s.Client, node *core
 
 	return result
 }
+
+// +kubebuilder:rbac:groups="",resources=pods,verbs=list;watch
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=nodes,verbs=get;list;watch
 
 // fetchNodeUsage fetches the node's current resource usage from the metrics API.
 // It returns nil when the metrics API is unavailable (e.g., no metrics-server),

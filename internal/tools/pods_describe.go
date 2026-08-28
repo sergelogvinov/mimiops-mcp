@@ -77,6 +77,9 @@ func RegisterPodsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerPodsDescribe(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=get;list;watch
+
 // handlerPodsDescribe returns a handler function for the pods_describe tool.
 func handlerPodsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -159,6 +162,9 @@ func fetchPodUsage(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *Po
 
 	return usage
 }
+
+// +kubebuilder:rbac:groups="",resources=events,verbs=list;watch
+// +kubebuilder:rbac:groups="",resources=events/status,verbs=list;watch
 
 // buildPodDescribeResult builds a PodDescribeResult from a Pod.
 func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodDescribeResult {

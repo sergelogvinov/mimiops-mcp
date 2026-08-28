@@ -52,6 +52,10 @@ func RegisterWorkloadsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	s.AddTool(tool, handlerWorkloadsList(mc))
 }
 
+// +kubebuilder:rbac:groups="",resources=deployments,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=statefulsets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=daemonsets,verbs=get;list;watch
+
 // handlerWorkloadsList returns the handler function for the workloads_list tool.
 func handlerWorkloadsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

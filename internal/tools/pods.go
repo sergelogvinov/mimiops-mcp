@@ -80,6 +80,8 @@ func toPodConditionInfo(pod *corev1.Pod) []ConditionInfo {
 	return conditions
 }
 
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
+
 // fetchPodLogStream fetches logs from a single pod and returns a LogStream.
 func fetchPodLogStream(ctx context.Context, client *k8s.Client, namespace, podName, container, stream string, tail, sinceSeconds int, previous bool) (LogStream, error) {
 	// Get pod to check container names

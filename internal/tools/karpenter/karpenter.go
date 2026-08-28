@@ -68,6 +68,8 @@ func NewKarpenterClient(kclient *k8s.Client) (*Client, error) {
 	return &Client{dynamic: dyn, core: kclient}, nil
 }
 
+// +kubebuilder:rbac:groups=karpenter.sh,resources=nodepools,verbs=get;list;watch
+
 // ListNodePools lists NodePool resources, optionally filtered by label/field
 // selectors, and enriches each with the number of nodes Karpenter manages for
 // it. CPU/memory usage is the total provisioned by the pool (status.resources)
@@ -96,6 +98,8 @@ func (c *Client) ListNodePools(ctx context.Context, labelSelector, fieldSelector
 	}
 	return summaries, nil
 }
+
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=list;watch
 
 // nodeCounts counts nodes per NodePool using the karpenter.sh/nodepool label.
 func (c *Client) nodeCounts(ctx context.Context) (map[string]int, error) {
