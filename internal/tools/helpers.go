@@ -182,6 +182,9 @@ func extractAnnotations(annotations map[string]string) map[string]string {
 
 	ignoreKeys := []string{
 		"deployment.kubernetes.io/revision",
+		"checksum/config",
+		"checksum/secret",
+		"checksum/configmap",
 	}
 	ignoreKeysPrefix := []string{
 		"kubectl.kubernetes.io/",
@@ -251,9 +254,9 @@ func extractLabels(labels map[string]string) map[string]string {
 	return result
 }
 
-func toPodSpec(pod *corev1.Pod) PodSpec {
-	tolerations := make([]TolerationInfo, 0, len(pod.Spec.Tolerations))
-	for _, toleration := range pod.Spec.Tolerations {
+func toPodSpec(spec *corev1.PodSpec) PodSpec {
+	tolerations := make([]TolerationInfo, 0, len(spec.Tolerations))
+	for _, toleration := range spec.Tolerations {
 		tolerations = append(tolerations, TolerationInfo{
 			Key:    toleration.Key,
 			Value:  toleration.Value,
@@ -262,15 +265,14 @@ func toPodSpec(pod *corev1.Pod) PodSpec {
 	}
 
 	return PodSpec{
-		RestartPolicy:     string(pod.Spec.RestartPolicy),
-		ServiceAccount:    pod.Spec.ServiceAccountName,
-		PriorityClassName: pod.Spec.PriorityClassName,
-		InitContainers:    toContainerInfoList(pod.Spec.InitContainers),
-		Containers:        toContainerInfoList(pod.Spec.Containers),
-		Volumes:           extractVolumeNames(pod.Spec.Volumes),
-		NodeSelector:      pod.Spec.NodeSelector,
+		RestartPolicy:     string(spec.RestartPolicy),
+		ServiceAccount:    spec.ServiceAccountName,
+		PriorityClassName: spec.PriorityClassName,
+		InitContainers:    toContainerInfoList(spec.InitContainers),
+		Containers:        toContainerInfoList(spec.Containers),
+		Volumes:           extractVolumeNames(spec.Volumes),
+		NodeSelector:      spec.NodeSelector,
 		Tolerations:       tolerations,
-		QOSClass:          string(pod.Status.QOSClass),
 	}
 }
 
@@ -278,12 +280,22 @@ func toContainerInfoList(containers []corev1.Container) []ContainerInfo {
 	infoList := make([]ContainerInfo, 0, len(containers))
 	for _, c := range containers {
 		infoList = append(infoList, ContainerInfo{
-			Name:  c.Name,
-			Image: c.Image,
-			Ports: extractContainerPorts(c.Ports),
+			Name:     c.Name,
+			Image:    c.Image,
+			Ports:    extractContainerPorts(c.Ports),
+			Requests: extractResourceList(c.Resources.Requests),
+			Limits:   extractResourceList(c.Resources.Limits),
 		})
 	}
 	return infoList
+}
+
+func extractResourceList(resources corev1.ResourceList) map[string]string {
+	result := make(map[string]string, len(resources))
+	for name, quantity := range resources {
+		result[string(name)] = quantity.String()
+	}
+	return result
 }
 
 func extractContainerPorts(ports []corev1.ContainerPort) []string {
@@ -294,10 +306,61 @@ func extractContainerPorts(ports []corev1.ContainerPort) []string {
 	return portList
 }
 
-func extractVolumeNames(volumes []corev1.Volume) []string {
-	volumeNames := make([]string, 0, len(volumes))
+func extractVolumeNames(volumes []corev1.Volume) []VolumesInfo {
+	volumeInfos := make([]VolumesInfo, 0, len(volumes))
 	for _, v := range volumes {
-		volumeNames = append(volumeNames, v.Name)
+		if strings.HasPrefix(v.Name, "kube-api-access-") {
+			continue
+		}
+
+		volumeInfos = append(volumeInfos, VolumesInfo{
+			Name: v.Name,
+			Type: func() string {
+				switch {
+				case v.VolumeSource.Secret != nil:
+					return "Secret"
+				case v.VolumeSource.ConfigMap != nil:
+					return "ConfigMap"
+				case v.VolumeSource.PersistentVolumeClaim != nil:
+					return "PersistentVolumeClaim"
+				case v.VolumeSource.EmptyDir != nil:
+					return "EmptyDir"
+				case v.VolumeSource.HostPath != nil:
+					return "HostPath"
+				case v.VolumeSource.Projected != nil:
+					return "Projected"
+				default:
+					return ""
+				}
+			}(),
+			SecretName: func() string {
+				if v.VolumeSource.Secret != nil {
+					return v.VolumeSource.Secret.SecretName
+				}
+				return ""
+			}(),
+			ConfigMapName: func() string {
+				if v.VolumeSource.ConfigMap != nil {
+					return v.VolumeSource.ConfigMap.Name
+				}
+				return ""
+			}(),
+			PersistentVolumeClaimName: func() string {
+				if v.VolumeSource.PersistentVolumeClaim != nil {
+					return v.VolumeSource.PersistentVolumeClaim.ClaimName
+				}
+				return ""
+			}(),
+			Optional: func() bool {
+				if v.VolumeSource.Secret != nil {
+					return v.VolumeSource.Secret.Optional != nil && *v.VolumeSource.Secret.Optional
+				}
+				if v.VolumeSource.ConfigMap != nil {
+					return v.VolumeSource.ConfigMap.Optional != nil && *v.VolumeSource.ConfigMap.Optional
+				}
+				return false
+			}(),
+		})
 	}
-	return volumeNames
+	return volumeInfos
 }

@@ -163,13 +163,14 @@ func fetchPodUsage(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *Po
 func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodDescribeResult {
 	result := &PodDescribeResult{
 		PodSummary:  toPodSummary(pod),
-		PodSpec:     toPodSpec(pod),
+		PodSpec:     toPodSpec(&pod.Spec),
 		Annotations: extractAnnotations(pod.Annotations),
 		Labels:      extractLabels(pod.Labels),
 		Conditions:  toPodConditionInfo(pod),
 		Usage:       fetchPodUsage(ctx, client, pod),
 	}
 
+	result.PodSpec.QOSClass = string(pod.Status.QOSClass)
 	result.PodSummary.OwnerReferences, _ = ownerReferences(ctx, client, pod) //nolint:errcheck
 
 	// List events

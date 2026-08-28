@@ -112,7 +112,6 @@ func registerCore(srv *server.MCPServer, mc *k8s.MultiClusterClient, allowDestru
 	}
 	RegisterClustersDescribe(srv, mc)
 	RegisterPodsList(srv, mc)
-	RegisterPodsGet(srv, mc)
 	RegisterPodsDescribe(srv, mc)
 	RegisterPodsLog(srv, mc)
 	RegisterJobsList(srv, mc)
@@ -135,7 +134,6 @@ func registerCore(srv *server.MCPServer, mc *k8s.MultiClusterClient, allowDestru
 	RegisterPriorityClassesList(srv, mc)
 	RegisterEventsGet(srv, mc)
 	RegisterWorkloadsList(srv, mc)
-	RegisterWorkloadsGet(srv, mc)
 	RegisterWorkloadsDescribe(srv, mc)
 	RegisterHPAList(srv, mc)
 	RegisterHPADescribe(srv, mc)

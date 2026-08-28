@@ -273,7 +273,7 @@ type PodSpec struct {
 	PriorityClassName string            `json:"priority_class_name,omitempty" jsonschema:"PriorityClassName"`
 	InitContainers    []ContainerInfo   `json:"init_containers,omitempty" jsonschema:"List of init containers"`
 	Containers        []ContainerInfo   `json:"containers" jsonschema:"List of containers"`
-	Volumes           []string          `json:"volumes,omitempty" jsonschema:"List of volumes names"`
+	Volumes           []VolumesInfo     `json:"volumes,omitempty" jsonschema:"List of volumes names"`
 	NodeSelector      map[string]string `json:"nodeSelector,omitempty" jsonschema:"Node selector"`
 	Tolerations       []TolerationInfo  `json:"tolerations,omitempty" jsonschema:"Tolerations"`
 	QOSClass          string            `json:"qos_class,omitempty" jsonschema:"Quality of Service class"`
@@ -289,9 +289,21 @@ type PodInfo struct {
 
 // ContainerInfo represents information about a container.
 type ContainerInfo struct {
-	Name  string   `json:"name" jsonschema:"Name"`
-	Image string   `json:"image" jsonschema:"Image"`
-	Ports []string `json:"ports,omitempty" jsonschema:"List of ports"`
+	Name     string            `json:"name" jsonschema:"Name"`
+	Image    string            `json:"image" jsonschema:"Image"`
+	Ports    []string          `json:"ports,omitempty" jsonschema:"List of ports"`
+	Requests map[string]string `json:"requests,omitempty" jsonschema:"Resource requests"`
+	Limits   map[string]string `json:"limits,omitempty" jsonschema:"Resource limits"`
+}
+
+// VolumesInfo represents information about a volume.
+type VolumesInfo struct {
+	Name                      string `json:"name" jsonschema:"Name of the volume"`
+	Type                      string `json:"type,omitempty" jsonschema:"Type of the volume"`
+	SecretName                string `json:"secret_name,omitempty" jsonschema:"Name of the secret if the volume is of type Secret"`
+	ConfigMapName             string `json:"config_map_name,omitempty" jsonschema:"Name of the config map if the volume is of type ConfigMap"`
+	PersistentVolumeClaimName string `json:"persistent_volume_claim_name,omitempty" jsonschema:"Name of the persistent volume claim if the volume is of type PersistentVolumeClaim"`
+	Optional                  bool   `json:"optional,omitempty" jsonschema:"Whether the volume is optional"`
 }
 
 // ConditionInfo represents information about a Job condition.

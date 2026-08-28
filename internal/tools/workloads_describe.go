@@ -18,6 +18,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -39,7 +40,9 @@ type WorkloadDescribeResult struct {
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 
 	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"Conditions"`
-	Pods       []PodSummary    `json:"pods,omitempty" jsonschema:"List of pods owned by the workload"`
+	Events     []EventSummary  `json:"events,omitempty" jsonschema:"List of events"`
+
+	Pods []PodSummary `json:"pods,omitempty" jsonschema:"List of pods owned by the workload"`
 }
 
 // RegisterWorkloadsDescribe adds the workloads_describe tool, which provides
@@ -116,14 +119,17 @@ func handlerWorkloadsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Conte
 // buildWorkloadDescribeResult builds a WorkloadDescribeResult from a workload object.
 func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.Client) *WorkloadDescribeResult {
 	result := &WorkloadDescribeResult{}
+	kind := ""
 
 	switch w := workload.(type) {
 	case *appsv1.Deployment:
+		kind = "Deployment"
 		result.WorkloadSummary = toWorkloadSummaryDeployment(w)
 		result.Labels = extractLabels(w.Labels)
 		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.Strategy.Type)
+		result.PodSpec = toPodSpec(&w.Spec.Template.Spec)
 
 		for _, cond := range w.Status.Conditions {
 			result.Conditions = append(result.Conditions, ConditionInfo{
@@ -135,11 +141,13 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		}
 
 	case *appsv1.StatefulSet:
+		kind = "StatefulSet"
 		result.WorkloadSummary = toWorkloadSummaryStatefulSet(w)
 		result.Labels = extractLabels(w.Labels)
 		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
+		result.PodSpec = toPodSpec(&w.Spec.Template.Spec)
 
 		for _, cond := range w.Status.Conditions {
 			result.Conditions = append(result.Conditions, ConditionInfo{
@@ -151,11 +159,13 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		}
 
 	case *appsv1.DaemonSet:
+		kind = "DaemonSet"
 		result.WorkloadSummary = toWorkloadSummaryDaemonSet(w)
 		result.Labels = extractLabels(w.Labels)
 		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
+		result.PodSpec = toPodSpec(&w.Spec.Template.Spec)
 
 		for _, cond := range w.Status.Conditions {
 			result.Conditions = append(result.Conditions, ConditionInfo{
@@ -186,6 +196,37 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 			}
 
 			result.Pods = append(result.Pods, podInfo)
+		}
+	}
+
+	// List events for the workload
+	if kind != "" {
+		events, err := client.CoreV1().Events(result.Namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.kind=%s,involvedObject.name=%s", kind, result.Name),
+		})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return result
+		}
+
+		result.Events = make([]EventSummary, 0, len(events.Items))
+		for _, e := range events.Items {
+			firstSeen := ""
+			if !e.FirstTimestamp.IsZero() {
+				firstSeen = formatAge(e.FirstTimestamp)
+			}
+
+			result.Events = append(result.Events, EventSummary{
+				Namespace: e.Namespace,
+				FirstSeen: firstSeen,
+				Age:       formatEventAge(e),
+				Message:   e.Message,
+				Reason:    e.Reason,
+				Type:      e.Type,
+			})
+		}
+
+		if len(result.Events) > 50 {
+			result.Events = result.Events[:50]
 		}
 	}
 
