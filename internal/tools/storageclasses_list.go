@@ -25,6 +25,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -83,7 +84,7 @@ func handlerStorageClassesList(mc *k8s.MultiClusterClient) func(ctx context.Cont
 				Name:                 sc.Name,
 				Provisioner:          sc.Provisioner,
 				AllowVolumeExpansion: allowExpansion,
-				Age:                  formatAge(sc.CreationTimestamp),
+				Age:                  age.FormatAge(sc.CreationTimestamp),
 			}
 			if sc.ReclaimPolicy != nil {
 				summary.ReclaimPolicy = string(*sc.ReclaimPolicy)

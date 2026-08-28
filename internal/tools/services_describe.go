@@ -26,6 +26,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -129,12 +130,12 @@ func buildServiceDescribeResult(ctx context.Context, client *k8s.Client, svc *co
 		if e.InvolvedObject.Kind == "Service" && e.InvolvedObject.Name == svc.Name {
 			firstSeen := ""
 			if !e.FirstTimestamp.IsZero() {
-				firstSeen = formatAge(e.FirstTimestamp)
+				firstSeen = age.FormatAge(e.FirstTimestamp)
 			}
 
 			result.Events = append(result.Events, EventSummary{
 				FirstSeen: firstSeen,
-				Age:       formatEventAge(e),
+				Age:       age.FormatEventAge(e),
 				Message:   e.Message,
 				Reason:    e.Reason,
 				Type:      e.Type,

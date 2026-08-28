@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -32,7 +33,7 @@ func toNodeSummary(node *corev1.Node) NodeSummary {
 		Name:           node.Name,
 		Status:         deriveNodeStatus(node),
 		Roles:          deriveNodeRoles(node),
-		Age:            formatAge(node.CreationTimestamp),
+		Age:            age.FormatAge(node.CreationTimestamp),
 		KubeletVersion: node.Status.NodeInfo.KubeletVersion,
 		ImageVersion:   node.Status.NodeInfo.OSImage,
 		InternalIPs:    strings.Join([]string{ips}, ","),

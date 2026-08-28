@@ -27,6 +27,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -128,7 +129,7 @@ func toHPASummary(hpa *autoscalingv2.HorizontalPodAutoscaler) HPASummary {
 		MinPods:   minPods,
 		MaxPods:   hpa.Spec.MaxReplicas,
 		Replicas:  hpa.Status.CurrentReplicas,
-		Age:       formatAge(hpa.CreationTimestamp),
+		Age:       age.FormatAge(hpa.CreationTimestamp),
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -65,6 +66,6 @@ func toServiceSummary(svc *corev1.Service) ServiceSummary {
 		ExternalIP: externalIP,
 		Ports:      ports,
 		Selector:   selector,
-		Age:        formatAge(svc.CreationTimestamp),
+		Age:        age.FormatAge(svc.CreationTimestamp),
 	}
 }

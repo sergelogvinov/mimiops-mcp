@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -191,7 +192,7 @@ func toWorkloadSummaryDeployment(deployment *appsv1.Deployment) WorkloadSummary 
 		Name:      deployment.Name,
 		Ready:     formatDeploymentReady(deployment),
 		Desired:   int(*deployment.Spec.Replicas),
-		Age:       formatAge(deployment.CreationTimestamp),
+		Age:       age.FormatAge(deployment.CreationTimestamp),
 	}
 }
 
@@ -203,7 +204,7 @@ func toWorkloadSummaryStatefulSet(statefulset *appsv1.StatefulSet) WorkloadSumma
 		Name:      statefulset.Name,
 		Ready:     formatStatefulSetReady(statefulset),
 		Desired:   int(*statefulset.Spec.Replicas),
-		Age:       formatAge(statefulset.CreationTimestamp),
+		Age:       age.FormatAge(statefulset.CreationTimestamp),
 	}
 }
 
@@ -215,7 +216,7 @@ func toWorkloadSummaryDaemonSet(daemonset *appsv1.DaemonSet) WorkloadSummary {
 		Name:      daemonset.Name,
 		Ready:     formatDaemonSetReady(daemonset),
 		Desired:   int(daemonset.Status.DesiredNumberScheduled),
-		Age:       formatAge(daemonset.CreationTimestamp),
+		Age:       age.FormatAge(daemonset.CreationTimestamp),
 	}
 }
 

@@ -19,6 +19,7 @@ package tools
 import (
 	"fmt"
 
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	batchv1 "k8s.io/api/batch/v1"
 )
 
@@ -39,7 +40,7 @@ func toJobSummary(job *batchv1.Job) JobSummary {
 		Name:        job.Name,
 		Completions: completions,
 		Duration:    duration,
-		Age:         formatAge(job.CreationTimestamp),
+		Age:         age.FormatAge(job.CreationTimestamp),
 		Status:      deriveJobStatus(job),
 	}
 }

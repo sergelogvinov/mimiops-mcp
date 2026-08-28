@@ -26,6 +26,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -142,7 +143,7 @@ func buildJobDescribeResult(ctx context.Context, job *batchv1.Job, client *k8s.C
 			Ready:    formatReady(pod.Status),
 			Status:   string(pod.Status.Phase),
 			Restarts: containerRestartCount(pod.Status),
-			Age:      formatAge(pod.CreationTimestamp),
+			Age:      age.FormatAge(pod.CreationTimestamp),
 			Node:     node,
 		}
 

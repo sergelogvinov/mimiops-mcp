@@ -38,7 +38,6 @@ func toHelmSummary(r *v1.Release) ReleaseSummary {
 	}
 }
 
-// formatAge calculates the age from creation time.
 func formatAge(created time.Time) string {
 	now := time.Now()
 	diff := now.Sub(created)

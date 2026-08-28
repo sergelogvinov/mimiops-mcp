@@ -24,6 +24,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	toolsfluxcd "github.com/sergelogvinov/mimiops-mcp/internal/tools/fluxcd"
 	toolshelm "github.com/sergelogvinov/mimiops-mcp/internal/tools/helm"
+	toolskarpenter "github.com/sergelogvinov/mimiops-mcp/internal/tools/karpenter"
 )
 
 // Extension describes a named, optional group of tools.
@@ -37,6 +38,7 @@ type Extension struct {
 var extensionsRegistry = []Extension{
 	{Name: "helm", Register: registerHelm},
 	{Name: "fluxcd", Register: registerFluxCD},
+	{Name: "karpenter", Register: registerKarpenter},
 }
 
 // RegisterTools wires the core tools and the requested extensions into the MCP
@@ -156,6 +158,12 @@ func registerHelm(srv *server.MCPServer, mc *k8s.MultiClusterClient, allowDestru
 	if allowDestructive {
 		toolshelm.RegisterHelmRollback(srv, mc)
 	}
+}
+
+// registerKarpenter wires all Karpenter tools into the MCP server.
+// allowDestructive is currently unused: Karpenter exposes read-only tools only.
+func registerKarpenter(srv *server.MCPServer, mc *k8s.MultiClusterClient, _ bool) {
+	toolskarpenter.RegisterNodePoolList(srv, mc)
 }
 
 // registerFluxCD wires all FluxCD tools into the MCP server.

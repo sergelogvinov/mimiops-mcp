@@ -70,6 +70,12 @@ With `--allow-destructive`, Flux also exposes:
 - `flux_reconcile` — trigger an immediate reconciliation of a GitRepository, HelmRelease, or Kustomization.
 - `flux_reconciliation` — suspend or resume a Flux HelmRelease or Kustomization.
 
+### Karpenter extension
+
+Enable Karpenter tools with `--extensions karpenter` (or `--extensions all`). Read-only inspection tools include:
+
+- NodePool: `karpenter_nodepools_list` — list NodePools with node class, node count, readiness, weight, and CPU/memory provisioned vs limits.
+
 ## Installation
 
 ```sh

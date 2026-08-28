@@ -25,6 +25,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -78,7 +79,7 @@ func handlerNamespacesList(mc *k8s.MultiClusterClient) func(ctx context.Context,
 			result.Namespaces = append(result.Namespaces, NamespaceSummary{
 				Name:   ns.Name,
 				Status: string(ns.Status.Phase),
-				Age:    formatAge(ns.CreationTimestamp),
+				Age:    age.FormatAge(ns.CreationTimestamp),
 			})
 		}
 

@@ -25,6 +25,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -125,7 +126,7 @@ func buildNamespaceDescribeResult(ns *corev1.Namespace, quota *corev1.ResourceQu
 		NamespaceSummary: NamespaceSummary{
 			Name:   ns.Name,
 			Status: string(ns.Status.Phase),
-			Age:    formatAge(ns.CreationTimestamp),
+			Age:    age.FormatAge(ns.CreationTimestamp),
 		},
 		Annotations: extractAnnotations(ns.Annotations),
 		Labels:      extractLabels(ns.Labels),

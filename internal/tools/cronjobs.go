@@ -19,6 +19,7 @@ package tools
 import (
 	"fmt"
 
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	batchv1 "k8s.io/api/batch/v1"
 )
 
@@ -31,7 +32,7 @@ func toCronJobSummary(cj *batchv1.CronJob) CronJobSummary {
 
 	lastSchedule := ""
 	if cj.Status.LastScheduleTime != nil {
-		lastSchedule = formatAgeMin(*cj.Status.LastScheduleTime)
+		lastSchedule = age.FormatAgeMin(*cj.Status.LastScheduleTime)
 	}
 
 	return CronJobSummary{
@@ -40,7 +41,7 @@ func toCronJobSummary(cj *batchv1.CronJob) CronJobSummary {
 		Schedule:     cj.Spec.Schedule,
 		Suspend:      suspend,
 		LastSchedule: lastSchedule,
-		Age:          formatAge(cj.CreationTimestamp),
+		Age:          age.FormatAge(cj.CreationTimestamp),
 		Status:       deriveCronJobStatus(cj),
 	}
 }

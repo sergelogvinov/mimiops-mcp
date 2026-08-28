@@ -26,6 +26,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -191,7 +192,7 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 				Ready:    formatReady(pod.Status),
 				Status:   string(pod.Status.Phase),
 				Restarts: containerRestartCount(pod.Status),
-				Age:      formatAge(pod.CreationTimestamp),
+				Age:      age.FormatAge(pod.CreationTimestamp),
 				Node:     node,
 			}
 
@@ -212,13 +213,13 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		for _, e := range events.Items {
 			firstSeen := ""
 			if !e.FirstTimestamp.IsZero() {
-				firstSeen = formatAge(e.FirstTimestamp)
+				firstSeen = age.FormatAge(e.FirstTimestamp)
 			}
 
 			result.Events = append(result.Events, EventSummary{
 				Namespace: e.Namespace,
 				FirstSeen: firstSeen,
-				Age:       formatEventAge(e),
+				Age:       age.FormatEventAge(e),
 				Message:   e.Message,
 				Reason:    e.Reason,
 				Type:      e.Type,

@@ -26,6 +26,7 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -90,7 +91,7 @@ func handlerLimitRangesList(mc *k8s.MultiClusterClient) func(ctx context.Context
 				Name:      lr.Name,
 				Namespace: lr.Namespace,
 				Types:     deriveLimitRangeTypes(&lr),
-				Age:       formatAge(lr.CreationTimestamp),
+				Age:       age.FormatAge(lr.CreationTimestamp),
 			})
 		}
 

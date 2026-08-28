@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -60,7 +61,7 @@ func toPodSummary(pod *corev1.Pod) PodSummary {
 		Ready:           formatReady(pod.Status),
 		Status:          string(pod.Status.Phase),
 		Restarts:        containerRestartCount(pod.Status),
-		Age:             formatAge(pod.CreationTimestamp),
+		Age:             age.FormatAge(pod.CreationTimestamp),
 		Node:            node,
 		OwnerReferences: ownerReferencesParent(pod),
 	}

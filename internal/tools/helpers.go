@@ -85,59 +85,6 @@ func ownerReferencesFromMetav1(refs []metav1.OwnerReference) []OwnerReference {
 	return result
 }
 
-// formatAge calculates the age from creation time.
-func formatAge(created metav1.Time) string {
-	now := time.Now()
-	diff := now.Sub(created.Time)
-
-	if diff < time.Minute {
-		return "0s"
-	}
-	if diff < time.Hour {
-		return fmt.Sprintf("%dm", int(diff.Minutes()))
-	}
-	if diff < 24*time.Hour {
-		return fmt.Sprintf("%dh", int(diff.Hours()))
-	}
-	return fmt.Sprintf("%dd", int(diff.Hours()/24))
-}
-
-// formatAgeMin calculates the age from creation time with hours and minutes granularity.
-func formatAgeMin(created metav1.Time) string {
-	now := time.Now()
-	diff := now.Sub(created.Time)
-
-	if diff < time.Minute {
-		return "0s"
-	}
-	if diff < time.Hour {
-		return fmt.Sprintf("%dm", int(diff.Minutes()))
-	}
-	if diff < 24*time.Hour {
-		hours := int(diff.Hours())
-		minutes := int(diff.Minutes()) % 60
-		if minutes == 0 {
-			return fmt.Sprintf("%dh", hours)
-		}
-		return fmt.Sprintf("%dh%dm", hours, minutes)
-	}
-	return fmt.Sprintf("%dd", int(diff.Hours()/24))
-}
-
-func formatEventAge(event corev1.Event) string {
-	firstSeen := ""
-	if !event.FirstTimestamp.IsZero() {
-		firstSeen = formatAge(event.FirstTimestamp)
-	}
-
-	age := ""
-	if !event.LastTimestamp.IsZero() {
-		age = formatAge(event.LastTimestamp)
-	}
-
-	return fmt.Sprintf("%s (x%d over %s)", age, event.Count, firstSeen)
-}
-
 // formatDuration calculates the duration between two times.
 func formatDuration(end, start metav1.Time) string {
 	endTime := end.Time
