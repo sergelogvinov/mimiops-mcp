@@ -46,7 +46,7 @@
 │  │  Destructive (gated by --allow-destructive, single-  │    │
 │  │    phase, no confirmation):  *_delete, *_scale,      │    │
 │  │    cronjobs_suspend/resume, jobs_create,             │    │
-│  │    rollout_restart, helm_rollback                    │    │
+│  │    workloads_restart, helm_rollback                  │    │
 │  └───────────────────────┬──────────────────────────────┘    │
 │                          │                                   │
 │  ┌───────────────────────▼────────────────────────────┐    │
@@ -127,7 +127,7 @@ mimiops/
 │   │   ├── cronjobs_describe.go # cronjobs_describe
 │   │   ├── cronjobs_suspend.go  # cronjobs_suspend (destructive)
 │   │   ├── cronjobs_resume.go   # cronjobs_resume (destructive)
-│   │   ├── rollout.go           # rollout_restart (destructive)
+│   │   ├── workloads_restart.go # workloads_restart (destructive)
 │   │   ├── nodes_list.go        # nodes_list
 │   │   ├── nodes_get.go         # nodes_get
 │   │   ├── nodes_describe.go    # nodes_describe
@@ -397,7 +397,7 @@ Two read-only + one destructive tool.
 
 ### 6.7 rollouts + misc destructive
 
-`rollout_restart` (D) — restarts a Deployment/StatefulSet/DaemonSet by patching the pod template (injects `kubectl.kubernetes.io/restartedAt` annotation). Params: `name`, `namespace`, `kind` (req, enum). Single-phase, gated by `--allow-destructive`, no `confirm`.
+`workloads_restart` (D) — rollout-restarts a Deployment/StatefulSet/DaemonSet by patching the pod template (injects `kubectl.kubernetes.io/restartedAt` annotation). Params: `namespace` (req), `name` (opt — single workload, kind probed if omitted), `kind` (opt, enum), `label_selector` (opt — restarts all matching workloads when `name` is omitted; one of `name`/`label_selector` is required). Single-phase, gated by `--allow-destructive`, no `confirm`.
 
 ---
 

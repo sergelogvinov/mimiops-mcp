@@ -145,6 +145,7 @@ func registerCore(srv *server.MCPServer, mc *k8s.MultiClusterClient, allowDestru
 		RegisterCronJobsSuspend(srv, mc)
 		RegisterCronJobsResume(srv, mc)
 		RegisterWorkloadsScale(srv, mc)
+		RegisterWorkloadsRestart(srv, mc)
 	}
 }
 
