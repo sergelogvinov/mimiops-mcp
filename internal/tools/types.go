@@ -263,6 +263,7 @@ type PodSummary struct {
 	Age             string           `json:"age" jsonschema:"Age"`
 	Status          string           `json:"status" jsonschema:"Status"`
 	Node            string           `json:"node" jsonschema:"Node"`
+	Zone            string           `json:"zone,omitempty" jsonschema:"Zone"`
 	OwnerReferences []OwnerReference `json:"ownerReferences,omitempty" jsonschema:"Owner References"`
 }
 
@@ -298,12 +299,13 @@ type ContainerInfo struct {
 
 // VolumesInfo represents information about a volume.
 type VolumesInfo struct {
-	Name                      string `json:"name" jsonschema:"Name of the volume"`
-	Type                      string `json:"type,omitempty" jsonschema:"Type of the volume"`
-	SecretName                string `json:"secret_name,omitempty" jsonschema:"Name of the secret if the volume is of type Secret"`
-	ConfigMapName             string `json:"config_map_name,omitempty" jsonschema:"Name of the config map if the volume is of type ConfigMap"`
-	PersistentVolumeClaimName string `json:"persistent_volume_claim_name,omitempty" jsonschema:"Name of the persistent volume claim if the volume is of type PersistentVolumeClaim"`
-	Optional                  bool   `json:"optional,omitempty" jsonschema:"Whether the volume is optional"`
+	Name                      string `json:"name" jsonschema:"Name"`
+	Type                      string `json:"type,omitempty" jsonschema:"Type"`
+	SecretName                string `json:"secret_name,omitempty" jsonschema:"Secret name"`
+	ConfigMapName             string `json:"config_map_name,omitempty" jsonschema:"ConfigMap name"`
+	PersistentVolumeClaimName string `json:"persistent_volume_claim_name,omitempty" jsonschema:"Persistent volume claim name"`
+	Optional                  bool   `json:"optional,omitempty" jsonschema:"Optional"`
+	StorageClass              string `json:"storage_class,omitempty" jsonschema:"StorageClass"`
 }
 
 // ConditionInfo represents information about a Job condition.

@@ -70,7 +70,7 @@ type PtrPtrRows struct {
 	Rows []**PtrPtrRow `json:"rows,omitempty" jsonschema:"Rows"`
 }
 
-func TestFallbackText(t *testing.T) {
+func TestToText(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		input    any
@@ -175,14 +175,13 @@ Internal IP addresses of the node: 10.0.0.1`,
 				NodeSelector: map[string]string{"pool": "default", "zone": "b"},
 			},
 			expected: `restart policy: Always
+Node selector: pool=default, zone=b
 
 ### List of containers
 
 | Name | Image | List of ports | Resource requests | Resource limits |
 | --- | --- | --- | --- | --- |
-| web | nginx:1.27 | 8080/tcp, 9090/tcp | cpu=100m, memory=128Mi | cpu=500m |
-
-Node selector: pool=default, zone=b`,
+| web | nginx:1.27 | 8080/tcp, 9090/tcp | cpu=100m, memory=128Mi | cpu=500m |`,
 		},
 		{
 			name: "limit range spec renders map cells",

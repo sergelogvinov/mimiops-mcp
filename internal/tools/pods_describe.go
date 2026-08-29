@@ -171,7 +171,7 @@ func fetchPodUsage(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *Po
 func buildPodDescribeResult(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodDescribeResult {
 	result := &PodDescribeResult{
 		PodSummary:  toPodSummary(pod),
-		PodSpec:     toPodSpec(&pod.Spec),
+		PodSpec:     toPodSpec(pod.Name, &pod.Spec),
 		Annotations: extractAnnotations(pod.Annotations),
 		Labels:      extractLabels(pod.Labels),
 		Conditions:  toPodConditionInfo(pod),

@@ -63,6 +63,7 @@ func toPodSummary(pod *corev1.Pod) PodSummary {
 		Restarts:        containerRestartCount(pod.Status),
 		Age:             age.FormatAge(pod.CreationTimestamp),
 		Node:            node,
+		Zone:            pod.Labels["topology.kubernetes.io/zone"],
 		OwnerReferences: ownerReferencesParent(pod),
 	}
 }
