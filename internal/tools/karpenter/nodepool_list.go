@@ -54,7 +54,7 @@ func RegisterNodePoolList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerNodePoolList returns a handler function for the karpenter_nodepools_list tool.
 func handlerNodePoolList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -65,6 +65,7 @@ func handlerNodePoolList(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "karpenter_nodepools_list called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"label_selector", labelSelector,
 			"field_selector", fieldSelector,
 		)

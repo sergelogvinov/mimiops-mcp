@@ -18,6 +18,8 @@ limitations under the License.
 package clusters
 
 import (
+	"context"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 )
@@ -39,7 +41,11 @@ func ClusterOptions(mc *k8s.MultiClusterClient) []mcp.ToolOption {
 // ResolveCluster resolves the target client for a tool call. An empty cluster
 // name selects the active cluster. In in-cluster mode the cluster parameter is
 // not exposed and the active client is always returned.
-func ResolveCluster(mc *k8s.MultiClusterClient, req mcp.CallToolRequest) (*k8s.Client, error) {
+//
+// The request context is forwarded so that, when OIDC authentication is
+// enabled, the caller's verified token is used to build a per-request client
+// (see MultiClusterClient.GetClusterForRequest).
+func ResolveCluster(ctx context.Context, mc *k8s.MultiClusterClient, req mcp.CallToolRequest) (*k8s.Client, error) {
 	if mc == nil {
 		return nil, nil
 	}
@@ -49,5 +55,5 @@ func ResolveCluster(mc *k8s.MultiClusterClient, req mcp.CallToolRequest) (*k8s.C
 		cluster = req.GetString("cluster", "")
 	}
 
-	return mc.GetCluster(cluster)
+	return mc.GetClusterForRequest(ctx, cluster)
 }

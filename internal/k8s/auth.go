@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sergelogvinov/mimiops-mcp/internal/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -32,6 +33,14 @@ import (
 // consumers (e.g. helm, via ToRawKubeConfigLoader) resolve independently and
 // always target the context they were built for.
 func (mc *MultiClusterClient) newClientForCluster(contextName string) (*Client, error) {
+	return mc.newClientForClusterWithToken(contextName, nil)
+}
+
+// newClientForClusterWithToken builds a Client for the named kubeconfig
+// context. When auth is non-nil, the verified OIDC token replaces every other
+// credential of the context so the API server authenticates the caller by the
+// forwarded token alone (see docs/oidc.md §6.6).
+func (mc *MultiClusterClient) newClientForClusterWithToken(contextName string, auth *oidc.Auth) (*Client, error) {
 	configFlags := &genericclioptions.ConfigFlags{
 		KubeConfig: mc.cfg.ConfigFlags.KubeConfig,
 		Namespace:  mc.cfg.ConfigFlags.Namespace,
@@ -51,6 +60,8 @@ func (mc *MultiClusterClient) newClientForCluster(contextName string) (*Client, 
 		return nil, fmt.Errorf("failed to get REST config for context %q: %w", contextName, err)
 	}
 
+	applyOIDCToken(restConfig, auth)
+
 	clientSet, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
@@ -64,6 +75,11 @@ func (mc *MultiClusterClient) newClientForCluster(contextName string) (*Client, 
 		namespace = "default"
 	}
 
+	user := contextAuthInfo(restConfig)
+	if name := oidcUserName(auth); name != "" {
+		user.Name = name
+	}
+
 	return &Client{
 		Interface:   clientSet,
 		configFlags: configFlags,
@@ -71,7 +87,7 @@ func (mc *MultiClusterClient) newClientForCluster(contextName string) (*Client, 
 		ContextName: contextName,
 		ClusterName: kubeCtx.Cluster,
 		Namespace:   namespace,
-		User:        contextAuthInfo(restConfig),
+		User:        user,
 		sanitizer:   mc.sanitizer,
 	}, nil
 }
@@ -80,7 +96,17 @@ func (mc *MultiClusterClient) newClientForCluster(contextName string) (*Client, 
 // returned by rest.InClusterConfig). Identity fields reflect the pod's
 // service account.
 func (mc *MultiClusterClient) newInClusterClient(restConfig *rest.Config) (*Client, error) {
-	clientSet, err := kubernetes.NewForConfig(restConfig)
+	return mc.newInClusterClientWithToken(restConfig, nil)
+}
+
+// newInClusterClientWithToken builds an in-cluster Client. When auth is
+// non-nil, the pod's service-account credentials are replaced by the verified
+// OIDC token.
+func (mc *MultiClusterClient) newInClusterClientWithToken(restConfig *rest.Config, auth *oidc.Auth) (*Client, error) {
+	config := rest.CopyConfig(restConfig)
+	applyOIDCToken(config, auth)
+
+	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
@@ -96,22 +122,69 @@ func (mc *MultiClusterClient) newInClusterClient(restConfig *rest.Config) (*Clie
 		KubeConfig: mc.cfg.ConfigFlags.KubeConfig,
 	}
 
+	user := contextAuthInfo(config)
+	if name := oidcUserName(auth); name != "" {
+		user.Name = name
+	}
+
 	return &Client{
 		Interface:   clientSet,
 		configFlags: configFlags,
-		restConfig:  restConfig,
+		restConfig:  config,
 		ClusterName: "in-cluster",
 		Namespace:   namespace,
-		User:        contextAuthInfo(restConfig),
+		User:        user,
 		sanitizer:   mc.sanitizer,
 	}, nil
+}
+
+// applyOIDCToken rewrites a rest.Config so the request authenticates solely
+// with the forwarded OIDC token: the token replaces any bearer credential,
+// and all other credentials (client certificates, basic auth, auth-provider
+// and exec plugins) are stripped. Impersonation settings are preserved: they
+// are operator-controlled (--as) and authorized by the API server.
+func applyOIDCToken(restConfig *rest.Config, auth *oidc.Auth) {
+	if auth == nil || auth.Token == "" {
+		return
+	}
+
+	restConfig.BearerToken = auth.Token
+	restConfig.BearerTokenFile = ""
+
+	// Strip TLS client-certificate credentials so the API server cannot
+	// authenticate the caller with a kubeconfig certificate identity that
+	// would bypass OIDC passthrough.
+	restConfig.CertData = nil
+	restConfig.CertFile = ""
+	restConfig.KeyData = nil
+	restConfig.KeyFile = ""
+
+	// Strip any other competing credential sources.
+	restConfig.Username = ""
+	restConfig.Password = ""
+	restConfig.AuthProvider = nil
+	restConfig.ExecProvider = nil
+}
+
+// oidcUserName returns the OIDC identity for observability (logs, tool
+// output). The API server derives the real identity from the token itself.
+func oidcUserName(auth *oidc.Auth) string {
+	if auth == nil || auth.Claims == nil {
+		return ""
+	}
+
+	if auth.Claims.Email != "" {
+		return auth.Claims.Email
+	}
+
+	return auth.Claims.Subject
 }
 
 // contextAuthInfo extracts identity information from a raw kubeconfig context.
 func contextAuthInfo(restConfig *rest.Config) UserInfo {
 	return UserInfo{
 		Name:              restConfig.Username,
-		Username:          restConfig.UserAgent,
+		Username:          restConfig.Username,
 		HasToken:          restConfig.BearerToken != "",
 		Impersonate:       restConfig.Impersonate.UserName,
 		ImpersonateGroups: restConfig.Impersonate.Groups,

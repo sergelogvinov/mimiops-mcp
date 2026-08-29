@@ -55,13 +55,16 @@ func RegisterNamespacesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerNamespacesList returns a handler function for the namespaces_list tool.
 func handlerNamespacesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "namespaces_list called")
+		log.DebugContext(ctx, "namespaces_list called",
+			"cluster", client.ClusterName,
+			"user", client.User.Name,
+		)
 
 		// List namespaces
 		namespaces, err := client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})

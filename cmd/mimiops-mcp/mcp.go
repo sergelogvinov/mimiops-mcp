@@ -34,7 +34,10 @@ func newMcpCmd(flags *Flags) *cobra.Command {
 		Short: "Serve MCP protocol over stdio",
 		Long:  "Serve MCP protocol over stdio for desktop clients (Claude Desktop, Cursor, VS Code)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg := flags.Config()
+			cfg, err := flags.Config()
+			if err != nil {
+				return err
+			}
 
 			mc, err := k8s.NewMultiClusterClient(cfg)
 			if err != nil {

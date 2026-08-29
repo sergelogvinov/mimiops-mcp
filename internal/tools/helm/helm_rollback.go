@@ -56,7 +56,7 @@ func RegisterHelmRollback(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerHelmRollback returns a handler function for the helm_rollback tool.
 func handlerHelmRollback(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -76,6 +76,7 @@ func handlerHelmRollback(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "helm_rollback called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"name", name,
 			"namespace", namespace,
 			"hooks", hooks,

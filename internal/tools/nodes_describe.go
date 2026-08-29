@@ -79,7 +79,7 @@ func RegisterNodesDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerNodesDescribe returns a handler function for the nodes_describe tool.
 func handlerNodesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -92,6 +92,7 @@ func handlerNodesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "nodes_describe called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"name", name,
 		)
 

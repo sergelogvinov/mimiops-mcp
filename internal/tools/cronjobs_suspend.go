@@ -53,7 +53,7 @@ func RegisterCronJobsSuspend(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerCronJobsSuspend returns a handler function for the cronjobs_suspend tool.
 func handlerCronJobsSuspend(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -71,6 +71,7 @@ func handlerCronJobsSuspend(mc *k8s.MultiClusterClient) func(ctx context.Context
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_suspend called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"namespace", namespace,
 			"cronjob", name,
 		)

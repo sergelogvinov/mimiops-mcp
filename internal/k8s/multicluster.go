@@ -17,12 +17,14 @@ limitations under the License.
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"sort"
 	"sync"
 
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
+	"github.com/sergelogvinov/mimiops-mcp/internal/oidc"
 	"github.com/sergelogvinov/mimiops-mcp/internal/utils"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -187,6 +189,45 @@ func (mc *MultiClusterClient) GetCluster(clusterName string) (*Client, error) {
 	mc.clients[clusterName] = client
 
 	return client, nil
+}
+
+// GetClusterForRequest resolves the client for a tool call. When the request
+// context carries a verified OIDC token (see internal/oidc), a fresh
+// per-request client is built with that token forwarded as the bearer
+// credential; per-request clients are not cached because every caller has a
+// distinct token. Without OIDC auth in the context it delegates to
+// GetCluster (the cached, identity-less path).
+func (mc *MultiClusterClient) GetClusterForRequest(ctx context.Context, clusterName string) (*Client, error) {
+	auth, ok := oidc.FromContext(ctx)
+	if !ok || auth.Token == "" {
+		return mc.GetCluster(clusterName)
+	}
+
+	if mc.inCluster != nil {
+		if clusterName != "" {
+			return nil, fmt.Errorf("not running in multi-cluster mode: the server uses the in-cluster configuration")
+		}
+
+		return mc.newInClusterClientWithToken(mc.inCluster.restConfig, auth)
+	}
+
+	if mc.raw == nil {
+		return nil, fmt.Errorf("not running in multi-cluster mode: the server uses the in-cluster configuration")
+	}
+
+	if clusterName == "" && mc.raw.CurrentContext != "" {
+		if c, ok := mc.raw.Contexts[mc.raw.CurrentContext]; ok && c != nil && c.Cluster != "" {
+			clusterName = c.Cluster
+		}
+	}
+
+	// mc.contexts is immutable after construction, safe to read unlocked.
+	contextName, ok := mc.contexts[clusterName]
+	if !ok {
+		return nil, fmt.Errorf("unknown cluster %q; see clusters_list", clusterName)
+	}
+
+	return mc.newClientForClusterWithToken(contextName, auth)
 }
 
 func representativeContexts(raw *api.Config) map[string]string {

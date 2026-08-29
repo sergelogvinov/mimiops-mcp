@@ -59,7 +59,7 @@ func RegisterLimitRangesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerLimitRangesList returns a handler function for the limitranges_list tool.
 func handlerLimitRangesList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -72,6 +72,7 @@ func handlerLimitRangesList(mc *k8s.MultiClusterClient) func(ctx context.Context
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "limitranges_list called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"namespace", namespace,
 		)
 

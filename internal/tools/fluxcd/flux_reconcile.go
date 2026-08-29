@@ -62,7 +62,7 @@ func RegisterFluxReconcile(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerFluxReconcile returns a handler function for the flux_reconcile tool.
 func handlerFluxReconcile(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -87,6 +87,7 @@ func handlerFluxReconcile(mc *k8s.MultiClusterClient) func(ctx context.Context, 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "flux_reconcile called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"kind", kind,
 			"namespace", namespace,
 			"name", name,

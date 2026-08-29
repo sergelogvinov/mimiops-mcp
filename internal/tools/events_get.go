@@ -61,7 +61,7 @@ func RegisterEventsGet(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerEventsGet returns a handler function for the events_get tool.
 func handlerEventsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -84,6 +84,7 @@ func handlerEventsGet(mc *k8s.MultiClusterClient) func(ctx context.Context, req 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "events_get called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"namespace", namespace,
 			"field_selector", fieldSelector,
 			"limit", limit,
