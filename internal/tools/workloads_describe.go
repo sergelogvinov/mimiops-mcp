@@ -22,11 +22,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -118,7 +118,7 @@ func handlerWorkloadsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Conte
 		}
 
 		result := buildWorkloadDescribeResult(ctx, workload, client)
-		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
+		return mcp.NewToolResultStructured(result, formatter.ToText(result)), nil
 	}
 }
 

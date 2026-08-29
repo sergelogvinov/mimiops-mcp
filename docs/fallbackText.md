@@ -43,13 +43,15 @@ PodSummary{
 Renders to:
 
 ```markdown
-- **Namespace of the Pod**: default
-- **Name of the Pod**: my-pod
-- **Roles of the Pod**: web, api
-- **Owner references of the Pod**:
-    | API version | Kind       | name          |
-    | ----------- | ---------- | ------------- |
-    | v1          | ReplicaSet | my-replicaset |
+Namespace of the Pod: default
+Name of the Pod: my-pod
+Roles of the Pod: web, api
+
+### Owner references of the Pod
+
+| API version | Kind       | name          |
+| ----------- | ---------- | ------------- |
+| v1          | ReplicaSet | my-replicaset |
 ```
 
 ---
@@ -65,9 +67,9 @@ a `jsonschema` tag are **skipped entirely** — no label, no value, no line.
 
 ## 4. Label source
 
-The **label** (the bold text before the colon) is the `jsonschema` tag value.
-Because fields without a `jsonschema` tag are skipped entirely (§3), the label
-always exists for any printed field.
+The **label** (the text before the colon, or the heading text) is the
+`jsonschema` tag value. Because fields without a `jsonschema` tag are skipped
+entirely (§3), the label always exists for any printed field.
 
 ---
 
@@ -80,21 +82,41 @@ The rendering of a field's value depends on its Go type:
 | Scalar (`string`, `int`, `int32`, `bool`, `float*`)         | Render the value as-is (`bool` → `true`/`false`). |
 | Slice of scalars (`[]string`, `[]int32`, …)                 | Join elements with `", "`.                        |
 | Slice of structs (`[]OwnerReference`, `[]ContainerInfo`, …) | Render as a markdown table (see §7).              |
-| Single struct (`NodeCapacityInfo`, `Replicas`, …)           | Render as a nested block (see §6).                |
+| Single struct (`NodeCapacityInfo`, `Replicas`, …)           | Render as a heading block (see §6).               |
 | Map (`map[string]string`, `map[string]any`, …)              | Render as `key=value` pairs (see §8).             |
 
 ---
 
-## 6. Nested structs
+## 6. Nested structs → headings
 
-A field whose type is a single struct (not a slice) is rendered as a nested
-bullet list, indented under the parent label:
+A field whose type is a single struct (not a slice) is rendered as a **markdown
+heading** followed by the struct's fields as plain text lines. **No indentation
+or padding is used** for nested structures.
+
+The heading level depends on the nesting depth of the struct:
+
+- A struct nested directly under the top-level struct → `###` (3 hashes).
+- A struct nested one level deeper → `####` (4 hashes).
+- Each additional nesting level adds one more `#`.
 
 ```markdown
-- **Capacity of the node**:
-    - **CPU capacity of the node**: 4
-    - **Memory capacity of the node**: 8Gi
-    - **Maximum number of pods the node can run**: 110
+### Capacity of the node
+
+CPU capacity of the node: 4
+Memory capacity of the node: 8Gi
+Maximum number of pods the node can run: 110
+```
+
+A deeper example:
+
+```markdown
+### Capacity of the node
+
+CPU capacity of the node: 4
+
+#### Some deeper struct
+
+Field of the deeper struct: value
 ```
 
 The nested fields follow the same rules (§3–§5) recursively.
@@ -105,21 +127,23 @@ The nested fields follow the same rules (§3–§5) recursively.
 
 When a field is a slice of structs, render it as a markdown table:
 
+- **Heading:** the field label as a heading (same level rules as §6).
 - **Header row:** the labels of the element struct's printable fields
   (in the element struct's declaration order).
 - **Separator row:** `| --- | --- | … |` (one column per field).
 - **Body:** one row per element, values in the same column order as the header.
 
 ```markdown
-- **Owner references of the Pod**:
-    | API version | Kind       | name          |
-    | ----------- | ---------- | ------------- |
-    | v1          | ReplicaSet | my-replicaset |
+### Owner references of the Pod
+
+| API version | Kind       | name          |
+| ----------- | ---------- | ------------- |
+| v1          | ReplicaSet | my-replicaset |
 ```
 
 Rules:
 
-- An **empty slice** omits the field entirely (no line, no table).
+- An **empty slice** omits the field entirely (no heading, no table).
 - If the element struct itself contains nested structs/slices/maps, those cells
   are rendered with the same inline rules as §5 (e.g. a slice-of-scalars cell is
   comma-joined).
@@ -128,10 +152,11 @@ Rules:
 
 ## 8. Maps
 
-A `map` field is rendered as a comma-separated list of `key=value` pairs:
+A `map` field is rendered as a comma-separated list of `key=value` pairs on a
+single plain text line:
 
 ```markdown
-- **Labels**: app=web, env=prod
+Labels: app=web, env=prod
 ```
 
 Rules:
@@ -153,7 +178,9 @@ Rules:
 
 ## 10. Top-level shape
 
-The output is a flat bullet list.
+The output is a flat list of plain text lines in the form `Label: value`. No
+bullet markers and no indentation are used at the top level. Nested structures
+are introduced by headings (§6, §7).
 
 ---
 
@@ -161,11 +188,11 @@ The output is a flat bullet list.
 
 - **Nested structs inside table cells** — render with inline rules.
 - **Deeply nested slices of structs** — recurse; a slice of structs inside a
-  struct inside a slice becomes a nested table.
+  struct inside a slice becomes a nested table under a deeper heading.
 - **`map[string]any`** (e.g. `WorkloadDetails.Spec` / `.Status`) — values are
   arbitrary; render each `key=value` pair with the value stringified.
 - **`nil` pointers / nil maps / nil slices** — render as empty (omitted).
-- **Empty slice / empty map** — omitted entirely (no line, no table).
+- **Empty slice / empty map** — omitted entirely (no heading, no table).
 
 ---
 
@@ -177,8 +204,12 @@ The output is a flat bullet list.
 - The type switch on `reflect.Kind` mirrors the table in §5:
     - `String`, `Int*`, `Uint*`, `Float*`, `Bool` → scalar
     - `Slice`/`Array` → recurse on element kind (scalar → join, struct → table)
-    - `Struct` → nested list (§6)
+    - `Struct` → heading block (§6)
     - `Map` → `key=value` list (§8)
     - `Ptr` → dereference (nil pointer renders as empty)
     - `Interface` → unwrap to the concrete value
+- Heading level is derived from nesting depth: `###` at depth 1, adding one `#`
+  per deeper level (§6).
 - Unknown/unhandled kinds are skipped.
+</content>
+</write_file>

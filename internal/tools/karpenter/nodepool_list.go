@@ -21,10 +21,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 )
 
 // NodePoolListResult is the result of karpenter_nodepools_list.
@@ -84,7 +84,7 @@ func handlerNodePoolList(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 
 		fallbackText := "No NodePool found"
 		if len(result.NodePools) > 0 {
-			fallbackText = formatter.ToMarkdown(result)
+			fallbackText = formatter.ToText(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

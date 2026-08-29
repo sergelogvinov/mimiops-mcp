@@ -22,11 +22,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 	"helm.sh/helm/v4/pkg/release/common"
 )
 
@@ -135,6 +135,6 @@ func handlerHelmRollback(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 			NewRevision: afterRollback.Version,
 		}
 
-		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
+		return mcp.NewToolResultStructured(result, formatter.ToText(result)), nil
 	}
 }
