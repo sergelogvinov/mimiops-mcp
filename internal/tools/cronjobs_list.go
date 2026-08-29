@@ -55,7 +55,7 @@ func RegisterCronJobsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerCronJobsList returns a handler function for the cronjobs_list tool.
 func handlerCronJobsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -68,6 +68,7 @@ func handlerCronJobsList(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "cronjobs_list called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"namespace", namespace,
 		)
 

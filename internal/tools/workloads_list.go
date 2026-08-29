@@ -59,7 +59,7 @@ func RegisterWorkloadsList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerWorkloadsList returns the handler function for the workloads_list tool.
 func handlerWorkloadsList(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
@@ -79,6 +79,7 @@ func handlerWorkloadsList(mc *k8s.MultiClusterClient) func(ctx context.Context, 
 		log := logger.FromContext(ctx)
 		log.DebugContext(ctx, "workloads_list called",
 			"cluster", client.ClusterName,
+			"user", client.User.Name,
 			"namespace", namespace,
 			"kind", kind,
 			"label_selector", labelSelector,

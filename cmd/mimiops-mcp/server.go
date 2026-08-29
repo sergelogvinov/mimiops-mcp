@@ -21,11 +21,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sergelogvinov/mimiops-mcp/internal/config"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/internal/oidc"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools"
 	"github.com/spf13/cobra"
 )
@@ -36,7 +38,10 @@ func newServerCmd(flags *Flags) *cobra.Command {
 		Short: "Serve MCP protocol over HTTP/SSE",
 		Long:  "Serve MCP protocol over HTTP/SSE for web/remote MCP clients",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg := flags.Config()
+			cfg, err := flags.Config()
+			if err != nil {
+				return err
+			}
 
 			mc, err := k8s.NewMultiClusterClient(cfg)
 			if err != nil {
@@ -50,7 +55,38 @@ func newServerCmd(flags *Flags) *cobra.Command {
 				return err
 			}
 
-			return serveSSE(cmd.Context(), mc, cfg, log)
+			// OIDC is enabled only when --oidc-issuer is set. Discovery is
+			// performed here so a misconfigured issuer fails fast at startup.
+			// A non-empty --oidc-callback-url additionally enables the OAuth
+			// proxy flow for clients that cannot use the issuer directly.
+			var verifier *oidc.Verifier
+			var proxy *oauthProxy
+
+			if cfg.OIDCIssuer != "" {
+				verifier, err = oidc.New(cmd.Context(), oidc.Config{
+					Issuer:       cfg.OIDCIssuer,
+					ClientID:     cfg.OIDCClientID,
+					EmailDomains: cfg.OIDCEmailDomains,
+				})
+				if err != nil {
+					return err
+				}
+
+				if cfg.OIDCCallbackURL != "" {
+					proxy, err = newOAuthProxy(verifier, proxyConfig{
+						clientID:     cfg.OIDCClientID,
+						clientSecret: cfg.OIDCClientSecret,
+						callbackURL:  cfg.OIDCCallbackURL,
+						scopes:       cfg.OIDCScope,
+						log:          log,
+					})
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			return serveSSE(cmd.Context(), mc, cfg, log, verifier, proxy)
 		},
 	}
 
@@ -59,11 +95,15 @@ func newServerCmd(flags *Flags) *cobra.Command {
 	return cmd
 }
 
-func serveSSE(_ context.Context, mc *k8s.MultiClusterClient, cfg *config.Config, log *slog.Logger) error {
+func serveSSE(_ context.Context, mc *k8s.MultiClusterClient, cfg *config.Config, log *slog.Logger, verifier *oidc.Verifier, proxy *oauthProxy) error {
 	log.Info("server config",
 		"allowDestructive", cfg.AllowDestructive,
 		"multiCluster", mc.IsMultiCluster(),
 		"clusters", len(mc.ListClusters()),
+		"oidc", verifier != nil,
+		"oidcIssuer", cfg.OIDCIssuer,
+		"oidcProxy", proxy != nil,
+		"oidcCallbackURL", cfg.OIDCCallbackURL,
 	)
 
 	for _, cluster := range mc.ListClusters() {
@@ -72,22 +112,6 @@ func serveSSE(_ context.Context, mc *k8s.MultiClusterClient, cfg *config.Config,
 			"server", cluster.Server,
 			"default", cluster.IsCurrent,
 		)
-
-		// mcClient, err := mc.GetCluster(cluster.Name)
-		// if err != nil {
-		// 	log.Error("failed to get client for cluster", "cluster", cluster.Name, "error", err)
-		// 	continue
-		// }
-
-		// log.Debug("cluster details",
-		// 	"contexts", cluster.Contexts,
-		// 	"namespace", mcClient.Namespace,
-		// 	"user", mcClient.User.Name,
-		// 	"username", mcClient.User.Username,
-		// 	"impersonate", mcClient.User.Impersonate,
-		// 	"impersonateGroups", mcClient.User.ImpersonateGroups,
-		// 	"hasToken", mcClient.User.HasToken,
-		// )
 	}
 
 	log.Info("serving mcp over http/stream", "port", cfg.Port)
@@ -112,5 +136,29 @@ func serveSSE(_ context.Context, mc *k8s.MultiClusterClient, cfg *config.Config,
 
 	httpServer := server.NewStreamableHTTPServer(srv, httpOpts...)
 
-	return httpServer.Start(":" + strconv.Itoa(cfg.Port))
+	if verifier == nil {
+		return httpServer.Start(":" + strconv.Itoa(cfg.Port))
+	}
+
+	// mcp-go v0.58.0 has no HTTP middleware option, but StreamableHTTPServer
+	// implements http.Handler: wrap it with an auth middleware that rejects
+	// unauthenticated requests with 401 before any tool handler runs, and
+	// injects the verified token into the request context for the
+	// per-request k8s client (see MultiClusterClient.GetClusterForRequest).
+	httpSrv := &http.Server{
+		Addr: ":" + strconv.Itoa(cfg.Port),
+		// Bound the request-header read only: the deadline expires before the
+		// handler (and thus the OIDC auth layer) runs, and ReadTimeout /
+		// WriteTimeout stay unset so SSE/streaming responses are not cut off.
+		ReadHeaderTimeout: 10 * time.Second,
+		Handler: newOIDCHandler(httpServer, oidcHandlerConfig{
+			verifier: verifier,
+			issuer:   cfg.OIDCIssuer,
+			proxy:    proxy,
+			scopes:   cfg.OIDCScope,
+			log:      log,
+		}),
+	}
+
+	return httpSrv.ListenAndServe()
 }

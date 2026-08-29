@@ -34,7 +34,6 @@ import (
 type ClustersDescribeResult struct {
 	Name        string   `json:"name" jsonschema:"Name of the cluster"`
 	Namespace   string   `json:"namespace" jsonschema:"Namespace of the cluster"`
-	ContextName string   `json:"context_name" jsonschema:"Name of the kubeconfig context"`
 	APIVersions []string `json:"api_versions" jsonschema:"API versions served by the cluster (group/version or v1)"`
 }
 
@@ -60,12 +59,15 @@ func handlerClustersDescribe(mc *k8s.MultiClusterClient) func(ctx context.Contex
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		log := logger.FromContext(ctx)
 
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
 
-		log.DebugContext(ctx, "clusters_describe called", "cluster", client.ClusterName)
+		log.DebugContext(ctx, "clusters_describe called",
+			"cluster", client.ClusterName,
+			"user", client.User.Name,
+		)
 
 		apiVersions, err := apiVersionsForCluster(ctx, client)
 		if err != nil {
@@ -75,7 +77,6 @@ func handlerClustersDescribe(mc *k8s.MultiClusterClient) func(ctx context.Contex
 		result := ClustersDescribeResult{
 			Name:        client.ClusterName,
 			Namespace:   client.Namespace,
-			ContextName: client.ContextName,
 			APIVersions: apiVersions,
 		}
 

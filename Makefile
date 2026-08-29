@@ -100,7 +100,7 @@ unit: ## Unit Tests
 test: lint unit ## Run all tests
 
 .PHONY: manifests
-manifests: ## Generate Kubernetes manifests
+manifests: ## Generate rbac manifests
 	controller-gen rbac:roleName=mimiops-mcp paths=./internal/tools/... output:rbac:artifacts:config=./docs/deploy
 
 .PHONY: install

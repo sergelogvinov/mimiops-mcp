@@ -63,7 +63,10 @@ func newToolsCmd(flags *Flags) *cobra.Command {
 
 // runTools executes the tools command.
 func runTools(ctx context.Context, f *Flags, args []string) error {
-	cfg := f.Config()
+	cfg, err := f.Config()
+	if err != nil {
+		return err
+	}
 
 	mc, err := k8s.NewMultiClusterClient(cfg)
 	if err != nil {

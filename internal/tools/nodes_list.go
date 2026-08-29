@@ -54,13 +54,16 @@ func RegisterNodesList(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // handlerNodesList returns a handler function for the nodes_list tool.
 func handlerNodesList(mc *k8s.MultiClusterClient) func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := clusters.ResolveCluster(mc, req)
+		client, err := clusters.ResolveCluster(ctx, mc, req)
 		if err != nil {
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
 
 		log := logger.FromContext(ctx)
-		log.DebugContext(ctx, "nodes_list called")
+		log.DebugContext(ctx, "nodes_list called",
+			"cluster", client.ClusterName,
+			"user", client.User.Name,
+		)
 
 		// List nodes
 		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})

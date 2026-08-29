@@ -31,12 +31,24 @@ const (
 	flagLogLevel         = "log-level"
 	flagLogFormat        = "log-format"
 	flagPort             = "port"
+	flagOIDCIssuer       = "oidc-issuer"
+	flagOIDCClientID     = "oidc-client-id"
+	flagOIDCClientSecret = "oidc-client-secret"
+	flagOIDCScope        = "oidc-scope"
+	flagOIDCEmailDomains = "oidc-email-domains"
+	flagOIDCCallbackURL  = "oidc-callback-url"
 
 	envExtensions       = "EXTENSIONS"
 	envAllowDestructive = "ALLOW_DESTRUCTIVE"
 	envLogLevel         = "LOG_LEVEL"
 	envLogFormat        = "LOG_FORMAT"
 	envPort             = "PORT"
+	envOIDCIssuer       = "OIDC_ISSUER"
+	envOIDCClientID     = "OIDC_CLIENT_ID"
+	envOIDCClientSecret = "OIDC_CLIENT_SECRET"
+	envOIDCScope        = "OIDC_SCOPE"
+	envOIDCEmailDomains = "OIDC_EMAIL_DOMAINS"
+	envOIDCCallbackURL  = "OIDC_CALLBACK_URL"
 
 	envKubeconfig  = "KUBECONFIG"
 	envContext     = "CONTEXT"
@@ -51,6 +63,13 @@ const (
 	defaultLogFormat        = "text"
 	defaultPort             = 8080
 	defaultOutputFormat     = "text"
+
+	defaultOIDCIssuer       = ""
+	defaultOIDCClientID     = ""
+	defaultOIDCClientSecret = ""
+	defaultOIDCScope        = "openid profile email"
+	defaultOIDCEmailDomains = ""
+	defaultOIDCCallbackURL  = ""
 )
 
 // Flags wraps genericclioptions.ConfigFlags and adds application-specific flags.
@@ -63,6 +82,13 @@ type Flags struct {
 	LogFormat        string
 	Port             int
 	Output           string
+
+	OIDCIssuer       string
+	OIDCClientID     string
+	OIDCClientSecret string
+	OIDCScope        string
+	OIDCEmailDomains string
+	OIDCCallbackURL  string
 }
 
 // DefaultFlags returns the default flags for the command,
@@ -89,6 +115,13 @@ func DefaultFlags() *Flags {
 		LogFormat:        withDefaultEnv(envLogFormat, defaultLogFormat),
 		Port:             withDefaultEnvInt(envPort, defaultPort),
 		Output:           defaultOutputFormat,
+
+		OIDCIssuer:       withDefaultEnv(envOIDCIssuer, defaultOIDCIssuer),
+		OIDCClientID:     withDefaultEnv(envOIDCClientID, defaultOIDCClientID),
+		OIDCClientSecret: withDefaultEnv(envOIDCClientSecret, defaultOIDCClientSecret),
+		OIDCScope:        withDefaultEnv(envOIDCScope, defaultOIDCScope),
+		OIDCEmailDomains: withDefaultEnv(envOIDCEmailDomains, defaultOIDCEmailDomains),
+		OIDCCallbackURL:  withDefaultEnv(envOIDCCallbackURL, defaultOIDCCallbackURL),
 	}
 }
 
@@ -102,6 +135,12 @@ func (f *Flags) AddPersistentFlags(flags *pflag.FlagSet) {
 	flags.BoolVarP(&f.AllowDestructive, flagAllowDestructive, "", f.AllowDestructive, "allow destructive operations (default: false)")
 	flags.StringVarP(&f.LogLevel, flagLogLevel, "", f.LogLevel, "log level: debug, info, warn, error (default: info)")
 	flags.StringVarP(&f.LogFormat, flagLogFormat, "", f.LogFormat, "log output format: text, json (default: text)")
+	flags.StringVarP(&f.OIDCIssuer, flagOIDCIssuer, "", f.OIDCIssuer, "OIDC issuer URL; enables OIDC authentication when set (env: OIDC_ISSUER)")
+	flags.StringVarP(&f.OIDCClientID, flagOIDCClientID, "", f.OIDCClientID, "client ID that must be present in the token's aud claim (env: OIDC_CLIENT_ID)")
+	flags.StringVarP(&f.OIDCEmailDomains, flagOIDCEmailDomains, "", f.OIDCEmailDomains, "comma-separated list of allowed email domains, empty allows all (env: OIDC_EMAIL_DOMAINS)")
+	flags.StringVarP(&f.OIDCCallbackURL, flagOIDCCallbackURL, "", f.OIDCCallbackURL, "fixed OAuth callback URL registered with the issuer; enables the OAuth proxy flow when set (env: OIDC_CALLBACK_URL)")
+	flags.StringVarP(&f.OIDCClientSecret, flagOIDCClientSecret, "", f.OIDCClientSecret, "issuer client secret for the authorization-code exchange in proxy mode (env: OIDC_CLIENT_SECRET)")
+	flags.StringVarP(&f.OIDCScope, flagOIDCScope, "", f.OIDCScope, "space-separated OAuth scopes requested from the issuer; must include openid (default: openid profile email) (env: OIDC_SCOPE)")
 }
 
 // AddServerFlags adds the flags for the "server" subcommand.
@@ -115,7 +154,17 @@ func (f *Flags) AddToolFlags(flags *pflag.FlagSet) {
 }
 
 // Config returns the internal config populated from the parsed flags.
-func (f *Flags) Config() *config.Config {
+func (f *Flags) Config() (*config.Config, error) {
+	emailDomains, err := config.ParseEmailDomains(f.OIDCEmailDomains)
+	if err != nil {
+		return nil, err
+	}
+
+	scopes := config.ParseScopes(f.OIDCScope)
+	if len(scopes) == 0 {
+		scopes = config.ParseScopes(defaultOIDCScope)
+	}
+
 	return &config.Config{
 		ConfigFlags:      f.configFlags,
 		Port:             f.Port,
@@ -123,7 +172,15 @@ func (f *Flags) Config() *config.Config {
 		AllowDestructive: f.AllowDestructive,
 		LogLevel:         f.LogLevel,
 		LogFormat:        f.LogFormat,
-	}
+
+		OIDCIssuer:       f.OIDCIssuer,
+		OIDCClientID:     f.OIDCClientID,
+		OIDCClientSecret: f.OIDCClientSecret,
+		OIDCScope:        scopes,
+		OIDCEmailDomains: emailDomains,
+
+		OIDCCallbackURL: f.OIDCCallbackURL,
+	}, nil
 }
 
 // ToRawKubeConfigLoader returns the underlying ConfigFlags for k8s client creation.
