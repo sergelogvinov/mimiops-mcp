@@ -21,10 +21,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 )
 
 // GitRepositoryListResult is the result of flux_gitrepositories_list.
@@ -86,7 +86,7 @@ func handlerGitRepositoriesList(mc *k8s.MultiClusterClient) func(ctx context.Con
 
 		fallbackText := "No GitRepository found"
 		if len(result.GitRepositories) > 0 {
-			fallbackText = formatter.ToMarkdown(result)
+			fallbackText = formatter.ToText(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

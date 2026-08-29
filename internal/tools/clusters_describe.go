@@ -19,22 +19,31 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ClustersDescribeResult represents the result of describing a cluster.
 type ClustersDescribeResult struct {
-	Name        string   `json:"name" jsonschema:"Name of the cluster"`
-	Namespace   string   `json:"namespace" jsonschema:"Namespace of the cluster"`
-	APIVersions []string `json:"api_versions" jsonschema:"API versions served by the cluster (group/version or v1)"`
+	Name          string   `json:"name" jsonschema:"Name of the cluster"`
+	APIVersions   []string `json:"api_versions" jsonschema:"API versions served by the cluster (group/version)"`
+	Namespaces    int      `json:"namespaces" jsonschema:"Number of namespaces in the cluster"`
+	NodeStatus    string   `json:"node_status" jsonschema:"Node counts in Ready/NotReady/Unknown"`
+	NodeResources string   `json:"node_resources" jsonschema:"Total resources in the cluster (CPU, Memory, etc.)"`
+	Regions       []string `json:"regions" jsonschema:"Regions where the cluster nodes run"`
+	Zones         []string `json:"zones" jsonschema:"Zones where the cluster nodes run"`
 }
 
 // RegisterClustersDescribe adds the clusters_describe tool, which returns the
@@ -74,14 +83,113 @@ func handlerClustersDescribe(mc *k8s.MultiClusterClient) func(ctx context.Contex
 			return mcp.NewToolResultErrorf("failed to fetch API versions for cluster %q: %v", client.ClusterName, err), nil
 		}
 
-		result := ClustersDescribeResult{
-			Name:        client.ClusterName,
-			Namespace:   client.Namespace,
-			APIVersions: apiVersions,
+		namespaceCount, nodeStatus, nodeResources, zones, regions, err := clusterStatus(ctx, client)
+		if err != nil {
+			return mcp.NewToolResultErrorf("failed to fetch cluster status for cluster %q: %v", client.ClusterName, err), nil
 		}
 
-		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
+		result := ClustersDescribeResult{
+			Name:          client.ClusterName,
+			APIVersions:   apiVersions,
+			Namespaces:    namespaceCount,
+			NodeStatus:    nodeStatus,
+			NodeResources: nodeResources,
+			Zones:         zones,
+			Regions:       regions,
+		}
+
+		return mcp.NewToolResultStructured(result, formatter.ToText(result)), nil
 	}
+}
+
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=list;watch
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=list;watch
+
+// clusterStatus collects the namespace count, node status summary, total
+// node resources, and the zones/regions where the cluster nodes run.
+// NodeStatus is formatted as "Ready/NotReady/Unknown" counts, e.g. "4/0/0".
+// NodeResources is the sum of node allocatable resources, rounded, e.g.
+// "cpu=8 cores, memory=32GB, pods=110".
+func clusterStatus(ctx context.Context, client *k8s.Client) (int, string, string, []string, []string, error) {
+	namespaces, err := client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return 0, "", "", nil, nil, fmt.Errorf("failed to list namespaces: %w", err)
+	}
+
+	nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return 0, "", "", nil, nil, fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	var (
+		ready, notReady, unknown int
+		cpu, memory, pods        resource.Quantity
+		zones, regions           []string
+	)
+
+	for i := range nodes.Items {
+		node := &nodes.Items[i]
+
+		switch nodeReadyStatus(node) {
+		case "Ready":
+			ready++
+		case "NotReady":
+			notReady++
+		default:
+			unknown++
+		}
+
+		if q := node.Status.Allocatable.Cpu(); q != nil {
+			cpu.Add(*q)
+		}
+		if q := node.Status.Allocatable.Memory(); q != nil {
+			memory.Add(*q)
+		}
+		if q := node.Status.Allocatable.Pods(); q != nil {
+			pods.Add(*q)
+		}
+
+		if zone := node.Labels[corev1.LabelTopologyZone]; zone != "" && !slices.Contains(zones, zone) {
+			zones = append(zones, zone)
+		}
+		if region := node.Labels[corev1.LabelTopologyRegion]; region != "" && !slices.Contains(regions, region) {
+			regions = append(regions, region)
+		}
+	}
+
+	sort.Strings(zones)
+	sort.Strings(regions)
+
+	nodeStatus := fmt.Sprintf("%d/%d/%d", ready, notReady, unknown)
+	nodeResources := fmt.Sprintf("cpu=%d, memory=%dGiB, pods=%d",
+		int(math.Round(float64(cpu.MilliValue())/1000)),
+		int(math.Round(float64(memory.Value())/float64(int64(1<<30)))),
+		pods.Value())
+
+	return len(namespaces.Items), nodeStatus, nodeResources, zones, regions, nil
+}
+
+// nodeReadyStatus returns the node status based on the Ready condition only,
+// ignoring the SchedulingDisabled suffix added by deriveNodeStatus.
+func nodeReadyStatus(node *corev1.Node) string {
+	for _, cond := range node.Status.Conditions {
+		if cond.Type != corev1.NodeReady {
+			continue
+		}
+
+		switch cond.Status {
+		case corev1.ConditionTrue:
+			return "Ready"
+		case corev1.ConditionFalse:
+			return "NotReady"
+		case corev1.ConditionUnknown:
+			return "Unknown"
+		}
+
+		break
+	}
+
+	return "Unknown"
 }
 
 // apiVersionsForCluster fetches the aggregated list of API versions
@@ -92,9 +200,25 @@ func apiVersionsForCluster(_ context.Context, client *k8s.Client) ([]string, err
 		return nil, fmt.Errorf("discovery failed: %w", err)
 	}
 
+	defaultPrefixAPIs := []string{
+		"v1",
+		"apps/",
+		"autoscaling/",
+		"batch/",
+		"policy/",
+		"metrics.k8s.io/",
+		"external.metrics.k8s.io/",
+	}
+
 	versions := make([]string, 0, len(groupList.Groups)+1)
 	for _, group := range groupList.Groups {
 		for _, version := range group.Versions {
+			if slices.ContainsFunc(defaultPrefixAPIs, func(s string) bool {
+				return strings.HasPrefix(version.GroupVersion, s)
+			}) {
+				continue
+			}
+
 			switch {
 			case version.GroupVersion == "":
 				// Skip empty group/version entries.
@@ -104,9 +228,6 @@ func apiVersionsForCluster(_ context.Context, client *k8s.Client) ([]string, err
 				continue
 			case strings.HasSuffix(version.GroupVersion, "k8s.io/v1"):
 				// Skip the internal k8s.io group, which is not relevant to users.
-				continue
-			case strings.HasPrefix(version.GroupVersion, "apps/"), strings.HasPrefix(version.GroupVersion, "autoscaling/"):
-				// Skip the apps group, which is handled separately.
 				continue
 			}
 

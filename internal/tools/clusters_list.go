@@ -21,9 +21,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 )
 
 // ClusterListEntry is one cluster entry in clusters_list output.
@@ -71,7 +71,7 @@ func handlerClustersList(mc *k8s.MultiClusterClient) func(ctx context.Context, _
 
 		fallbackText := "No clusters found"
 		if len(result.Clusters) > 0 {
-			fallbackText = formatter.ToMarkdown(result)
+			fallbackText = formatter.ToText(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

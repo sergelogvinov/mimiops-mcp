@@ -21,11 +21,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -93,7 +93,7 @@ func handlerPriorityClassesList(mc *k8s.MultiClusterClient) func(ctx context.Con
 		// Build fallback text
 		fallbackText := "No priority classes found"
 		if len(result.PriorityClasses) > 0 {
-			fallbackText = formatter.ToMarkdown(result)
+			fallbackText = formatter.ToText(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

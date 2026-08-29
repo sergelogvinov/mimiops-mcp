@@ -21,11 +21,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
 	"github.com/sergelogvinov/mimiops-mcp/pkg/age"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,7 +97,7 @@ func handlerLimitRangesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Con
 		}
 
 		result := buildLimitRangeDescribeResult(lr)
-		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
+		return mcp.NewToolResultStructured(result, formatter.ToText(result)), nil
 	}
 }
 

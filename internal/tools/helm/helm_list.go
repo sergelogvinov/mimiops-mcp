@@ -21,11 +21,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/helm"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 )
 
 // HelmListResult represents the result of listing Helm releases.
@@ -101,7 +101,7 @@ func handlerHelmList(mc *k8s.MultiClusterClient) func(ctx context.Context, req m
 		// Build fallback text
 		fallbackText := "No Helm releases found"
 		if len(result.Releases) > 0 {
-			fallbackText = formatter.ToMarkdown(result)
+			fallbackText = formatter.ToText(result)
 		}
 
 		return mcp.NewToolResultStructured(result, fallbackText), nil

@@ -21,10 +21,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 )
 
 // OCIRepositoryDescribeResult is the result of flux_ocirepositories_describe.
@@ -98,6 +98,6 @@ func handlerOCIRepositoriesDescribe(mc *k8s.MultiClusterClient) func(ctx context
 			return mcp.NewToolResultErrorf("%v", err), nil
 		}
 
-		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
+		return mcp.NewToolResultStructured(result, formatter.ToText(result)), nil
 	}
 }

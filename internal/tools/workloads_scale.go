@@ -21,10 +21,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/sergelogvinov/mimiops-mcp/internal/formatter"
 	"github.com/sergelogvinov/mimiops-mcp/internal/k8s"
 	"github.com/sergelogvinov/mimiops-mcp/internal/logger"
 	"github.com/sergelogvinov/mimiops-mcp/internal/tools/clusters"
+	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -129,6 +129,6 @@ func handlerWorkloadsScale(mc *k8s.MultiClusterClient) func(ctx context.Context,
 		}
 
 		result := ScaleResult{WorkloadSummary: toWorkloadSummary(updatedWorkload)}
-		return mcp.NewToolResultStructured(result, formatter.ToMarkdown(result)), nil
+		return mcp.NewToolResultStructured(result, formatter.ToText(result)), nil
 	}
 }
