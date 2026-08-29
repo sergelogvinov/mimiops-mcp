@@ -138,7 +138,7 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.Strategy.Type)
-		result.PodSpec = toPodSpec(&w.Spec.Template.Spec)
+		result.PodSpec = toPodSpec("", &w.Spec.Template.Spec)
 
 		for _, cond := range w.Status.Conditions {
 			result.Conditions = append(result.Conditions, ConditionInfo{
@@ -156,7 +156,7 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
-		result.PodSpec = toPodSpec(&w.Spec.Template.Spec)
+		result.PodSpec = toPodSpec("", &w.Spec.Template.Spec)
 
 		for _, cond := range w.Status.Conditions {
 			result.Conditions = append(result.Conditions, ConditionInfo{
@@ -174,7 +174,7 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		result.Annotations = extractAnnotations(w.Annotations)
 		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
-		result.PodSpec = toPodSpec(&w.Spec.Template.Spec)
+		result.PodSpec = toPodSpec("", &w.Spec.Template.Spec)
 
 		for _, cond := range w.Status.Conditions {
 			result.Conditions = append(result.Conditions, ConditionInfo{

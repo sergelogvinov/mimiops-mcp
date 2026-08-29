@@ -56,7 +56,7 @@ func toCronJobSpec(cj *batchv1.CronJob) CronJobSpec {
 			PriorityClassName: cj.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName,
 			InitContainers:    toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.InitContainers),
 			Containers:        toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.Containers),
-			Volumes:           extractVolumeNames(cj.Spec.JobTemplate.Spec.Template.Spec.Volumes),
+			Volumes:           extractVolumeNames("", cj.Spec.JobTemplate.Spec.Template.Spec.Volumes),
 		},
 	}
 

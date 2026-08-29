@@ -53,7 +53,7 @@ func toJobSpec(job *batchv1.Job) JobSpec {
 			PriorityClassName: job.Spec.Template.Spec.PriorityClassName,
 			InitContainers:    toContainerInfoList(job.Spec.Template.Spec.InitContainers),
 			Containers:        toContainerInfoList(job.Spec.Template.Spec.Containers),
-			Volumes:           extractVolumeNames(job.Spec.Template.Spec.Volumes),
+			Volumes:           extractVolumeNames("", job.Spec.Template.Spec.Volumes),
 		},
 	}
 

@@ -58,10 +58,14 @@ Roles of the Pod: web, api
 
 ## 3. Field selection
 
-Iterate over the struct fields **in declaration order**.
+Iterate over the struct fields **in declaration order**, but render them in
+two groups: **flat fields first** (scalars, maps, slices of scalars — the
+`Label: value` lines), **then block fields** (nested structs and slices of
+structs — the heading blocks and tables). Declaration order is preserved
+within each group.
 
-A field is **printable** only if it carries a `jsonschema` tag. Fields without
-a `jsonschema` tag are **skipped entirely** — no label, no value, no line.
+A field is **printable** only if it carries a `jsonschema` tag. Fields without a
+`jsonschema` tag are **skipped entirely** — no label, no value, no line.
 
 ---
 
@@ -178,9 +182,9 @@ Rules:
 
 ## 10. Top-level shape
 
-The output is a flat list of plain text lines in the form `Label: value`. No
-bullet markers and no indentation are used at the top level. Nested structures
-are introduced by headings (§6, §7).
+The output starts with the flat fields as plain text lines in the form
+`Label: value`, followed by the block fields introduced by headings (§6, §7).
+No bullet markers and no indentation are used.
 
 ---
 

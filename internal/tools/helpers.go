@@ -203,7 +203,10 @@ func extractLabels(labels map[string]string) map[string]string {
 	return result
 }
 
-func toPodSpec(spec *corev1.PodSpec) PodSpec {
+// toPodSpec converts a PodSpec into a PodSpec summary. podName is the name of
+// the concrete Pod the spec belongs to; it may be empty when only a controller
+// template is described.
+func toPodSpec(podName string, spec *corev1.PodSpec) PodSpec {
 	tolerations := make([]TolerationInfo, 0, len(spec.Tolerations))
 	for _, toleration := range spec.Tolerations {
 		tolerations = append(tolerations, TolerationInfo{
@@ -219,7 +222,7 @@ func toPodSpec(spec *corev1.PodSpec) PodSpec {
 		PriorityClassName: spec.PriorityClassName,
 		InitContainers:    toContainerInfoList(spec.InitContainers),
 		Containers:        toContainerInfoList(spec.Containers),
-		Volumes:           extractVolumeNames(spec.Volumes),
+		Volumes:           extractVolumeNames(podName, spec.Volumes),
 		NodeSelector:      spec.NodeSelector,
 		Tolerations:       tolerations,
 	}
@@ -255,7 +258,11 @@ func extractContainerPorts(ports []corev1.ContainerPort) []string {
 	return portList
 }
 
-func extractVolumeNames(volumes []corev1.Volume) []VolumesInfo {
+// extractVolumeNames converts volumes into VolumesInfo summaries. podName is
+// the name of the concrete Pod that mounts the volumes: generic ephemeral
+// volumes derive their PVC name from it. It may be empty when the pod name is
+// unknown, in which case the derived claim name is left unset.
+func extractVolumeNames(podName string, volumes []corev1.Volume) []VolumesInfo {
 	volumeInfos := make([]VolumesInfo, 0, len(volumes))
 	for _, v := range volumes {
 		if strings.HasPrefix(v.Name, "kube-api-access-") {
@@ -278,6 +285,8 @@ func extractVolumeNames(volumes []corev1.Volume) []VolumesInfo {
 					return "HostPath"
 				case v.VolumeSource.Projected != nil:
 					return "Projected"
+				case v.VolumeSource.Ephemeral != nil:
+					return "Ephemeral"
 				default:
 					return ""
 				}
@@ -298,6 +307,12 @@ func extractVolumeNames(volumes []corev1.Volume) []VolumesInfo {
 				if v.VolumeSource.PersistentVolumeClaim != nil {
 					return v.VolumeSource.PersistentVolumeClaim.ClaimName
 				}
+				if v.VolumeSource.Ephemeral != nil && v.VolumeSource.Ephemeral.VolumeClaimTemplate != nil {
+					if v.VolumeSource.Ephemeral.VolumeClaimTemplate.Name == "" && podName != "" {
+						return fmt.Sprintf("%s-%s", podName, v.Name)
+					}
+					return v.VolumeSource.Ephemeral.VolumeClaimTemplate.Name
+				}
 				return ""
 			}(),
 			Optional: func() bool {
@@ -308,6 +323,15 @@ func extractVolumeNames(volumes []corev1.Volume) []VolumesInfo {
 					return v.VolumeSource.ConfigMap.Optional != nil && *v.VolumeSource.ConfigMap.Optional
 				}
 				return false
+			}(),
+			StorageClass: func() string {
+				if v.VolumeSource.Ephemeral != nil && v.VolumeSource.Ephemeral.VolumeClaimTemplate != nil {
+					if v.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.StorageClassName != nil {
+						return *v.VolumeSource.Ephemeral.VolumeClaimTemplate.Spec.StorageClassName
+					}
+					return ""
+				}
+				return ""
 			}(),
 		})
 	}

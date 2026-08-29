@@ -30,11 +30,12 @@ import (
 // data, following docs/fallbackText.md.
 //
 // Only fields carrying a `jsonschema` tag are rendered, and the tag value is
-// used as the field label. Embedded structs are flattened. Nested structs
-// become heading blocks, slices of structs become markdown tables, maps become
-// sorted key=value lists, and scalars are rendered as-is. Fields tagged
-// `,omitempty` are omitted when zero-valued, and empty slices/maps are always
-// omitted.
+// used as the field label. Embedded structs are flattened. Flat fields
+// (scalars, maps, slices of scalars) are rendered first as "Label: value"
+// lines, followed by the block fields: nested structs become heading blocks
+// and slices of structs become markdown tables. Maps become sorted key=value
+// lists. Fields tagged `,omitempty` are omitted when zero-valued, and empty
+// slices/maps are always omitted.
 func ToText(v any) string {
 	sv := indirect(reflect.ValueOf(v))
 	if !sv.IsValid() || sv.Kind() != reflect.Struct {
@@ -48,10 +49,35 @@ func ToText(v any) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-// renderStruct writes the printable fields of sv as plain text lines. depth is
-// the nesting level of sv (0 for the top-level struct) and drives heading
-// levels of nested blocks.
+// renderStruct writes the printable fields of sv: flat fields first as
+// "Label: value" lines, then block fields (nested structs and tables) as
+// headings. depth is the nesting level of sv (0 for the top-level struct) and
+// drives heading levels of nested blocks.
 func renderStruct(sb *strings.Builder, sv reflect.Value, depth int) {
+	flat, blocks := collectItems(sv)
+
+	for _, it := range flat {
+		writeField(sb, it.label, formatInline(it.fv))
+	}
+
+	for _, it := range blocks {
+		renderBlock(sb, it.label, it.fv, depth)
+	}
+}
+
+// item is one printable field of a struct, classified by rendering style.
+type item struct {
+	label string
+	fv    reflect.Value
+}
+
+// collectItems returns the printable fields of sv split into flat items
+// (scalars, maps, slices of scalars — rendered as "Label: value" lines) and
+// block items (nested structs and slices of structs — rendered as headings).
+// Declaration order is preserved within each group. Embedded structs without
+// their own label contribute to both groups, mirroring how encoding/json
+// promotes embedded fields.
+func collectItems(sv reflect.Value) (flat, blocks []item) {
 	t := sv.Type()
 
 	for i := range t.NumField() {
@@ -66,7 +92,9 @@ func renderStruct(sb *strings.Builder, sv reflect.Value, depth int) {
 		// Embedded structs without their own label are flattened into the
 		// parent, mirroring how encoding/json promotes embedded fields.
 		if f.Anonymous && label == "" && fv.Kind() == reflect.Struct {
-			renderStruct(sb, fv, depth)
+			subFlat, subBlocks := collectItems(fv)
+			flat = append(flat, subFlat...)
+			blocks = append(blocks, subBlocks...)
 
 			continue
 		}
@@ -79,52 +107,46 @@ func renderStruct(sb *strings.Builder, sv reflect.Value, depth int) {
 			continue
 		}
 
-		renderValue(sb, label, fv, depth)
+		if isBlock(fv) {
+			blocks = append(blocks, item{label: label, fv: fv})
+		} else {
+			flat = append(flat, item{label: label, fv: fv})
+		}
 	}
+
+	return flat, blocks
 }
 
-// renderValue writes a single labeled field, dispatching on the value kind.
-func renderValue(sb *strings.Builder, label string, fv reflect.Value, depth int) {
+// isBlock reports whether fv renders as a heading block: a nested struct or a
+// slice/array of structs. Everything else renders inline.
+func isBlock(fv reflect.Value) bool {
 	//nolint:exhaustive
 	switch fv.Kind() {
-	case reflect.String, reflect.Bool,
-		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Float32, reflect.Float64:
-		writeField(sb, label, formatScalar(fv))
-	case reflect.Slice, reflect.Array:
-		renderSlice(sb, label, fv, depth)
 	case reflect.Struct:
-		writeHeading(sb, depth, label)
-		renderStruct(sb, fv, depth+1)
-	case reflect.Map:
-		writeField(sb, label, formatMap(fv))
+		return true
+	case reflect.Slice, reflect.Array:
+		et := fv.Type().Elem()
+		for et.Kind() == reflect.Pointer {
+			et = et.Elem()
+		}
+
+		return et.Kind() == reflect.Struct
 	}
+
+	return false
 }
 
-// renderSlice writes a slice field: scalars are joined with ", ", structs are
-// rendered as a markdown table under a heading.
-func renderSlice(sb *strings.Builder, label string, fv reflect.Value, depth int) {
-	et := fv.Type().Elem()
-	for et.Kind() == reflect.Pointer {
-		et = et.Elem()
-	}
-
-	if et.Kind() == reflect.Struct {
-		renderTable(sb, label, fv, depth)
+// renderBlock writes a block item: a nested struct as a heading followed by
+// its fields, or a slice of structs as a markdown table under a heading.
+func renderBlock(sb *strings.Builder, label string, fv reflect.Value, depth int) {
+	if fv.Kind() == reflect.Struct {
+		writeHeading(sb, depth, label)
+		renderStruct(sb, fv, depth+1)
 
 		return
 	}
 
-	parts := make([]string, 0, fv.Len())
-
-	for i := range fv.Len() {
-		if e := indirect(fv.Index(i)); e.IsValid() {
-			parts = append(parts, formatInline(e))
-		}
-	}
-
-	writeField(sb, label, strings.Join(parts, ", "))
+	renderTable(sb, label, fv, depth)
 }
 
 // renderTable writes a slice of structs as a markdown table under a heading.
