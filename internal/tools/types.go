@@ -299,13 +299,15 @@ type ContainerInfo struct {
 
 // VolumesInfo represents information about a volume.
 type VolumesInfo struct {
-	Name                      string `json:"name" jsonschema:"Name"`
-	Type                      string `json:"type,omitempty" jsonschema:"Type"`
-	SecretName                string `json:"secret_name,omitempty" jsonschema:"Secret name"`
-	ConfigMapName             string `json:"config_map_name,omitempty" jsonschema:"ConfigMap name"`
-	PersistentVolumeClaimName string `json:"persistent_volume_claim_name,omitempty" jsonschema:"Persistent volume claim name"`
-	Optional                  bool   `json:"optional,omitempty" jsonschema:"Optional"`
-	StorageClass              string `json:"storage_class,omitempty" jsonschema:"StorageClass"`
+	Name                      string            `json:"name" jsonschema:"Name"`
+	Annotations               map[string]string `json:"annotations,omitempty" jsonschema:"Annotations"`
+	Labels                    map[string]string `json:"labels,omitempty" jsonschema:"Labels"`
+	Type                      string            `json:"type,omitempty" jsonschema:"Type"`
+	SecretName                string            `json:"secret_name,omitempty" jsonschema:"Secret name"`
+	ConfigMapName             string            `json:"config_map_name,omitempty" jsonschema:"ConfigMap name"`
+	PersistentVolumeClaimName string            `json:"persistent_volume_claim_name,omitempty" jsonschema:"Persistent volume claim name"`
+	Optional                  bool              `json:"optional,omitempty" jsonschema:"Optional"`
+	StorageClass              string            `json:"storage_class,omitempty" jsonschema:"StorageClass"`
 }
 
 // ConditionInfo represents information about a Job condition.

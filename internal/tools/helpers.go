@@ -333,6 +333,18 @@ func extractVolumeNames(podName string, volumes []corev1.Volume) []VolumesInfo {
 				}
 				return ""
 			}(),
+			Labels: func() map[string]string {
+				if v.VolumeSource.Ephemeral != nil && v.VolumeSource.Ephemeral.VolumeClaimTemplate != nil {
+					return extractLabels(v.VolumeSource.Ephemeral.VolumeClaimTemplate.Labels)
+				}
+				return nil
+			}(),
+			Annotations: func() map[string]string {
+				if v.VolumeSource.Ephemeral != nil && v.VolumeSource.Ephemeral.VolumeClaimTemplate != nil {
+					return extractAnnotations(v.VolumeSource.Ephemeral.VolumeClaimTemplate.Annotations)
+				}
+				return nil
+			}(),
 		})
 	}
 	return volumeInfos
