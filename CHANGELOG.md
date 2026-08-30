@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.4.0](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.3.0...v0.4.0) (2026-08-30)
+
+
+### Features
+
+* add oidc authentication for mcp server ([50a1699](https://github.com/sergelogvinov/mimiops-mcp/commit/50a16999f41874c4cfcb3516be8e664fc490e950))
+* helm chart ([f41489d](https://github.com/sergelogvinov/mimiops-mcp/commit/f41489dcf07186d1e09af768404760f2380d5d70))
+* horizontalpodautoscaler ([bc54e5f](https://github.com/sergelogvinov/mimiops-mcp/commit/bc54e5fb1f9d76b4cf62e865d1735af16308ae8b))
+* persistentvolumeclaims ([845cd3e](https://github.com/sergelogvinov/mimiops-mcp/commit/845cd3e2e67d59b37a224bc8271645823a83f56e))
+* rbac generate ([5752fe7](https://github.com/sergelogvinov/mimiops-mcp/commit/5752fe716710ba33a28239dd6ac114861422d4c1))
+* render flat fields before block fields ([e303aa7](https://github.com/sergelogvinov/mimiops-mcp/commit/e303aa76ba55c4d46671629b03eccf0a52c06560))
+* resource metrics ([4aa2e6c](https://github.com/sergelogvinov/mimiops-mcp/commit/4aa2e6c931281d86e7ecdf741f1131af4e7424c9))
+
+
+### Bug Fixes
+
+* describe tools ([03007e3](https://github.com/sergelogvinov/mimiops-mcp/commit/03007e38fd5d8f3c2fe4a80bbb4c218205b03481))
+* describe tools ([4e51ecf](https://github.com/sergelogvinov/mimiops-mcp/commit/4e51ecfd9dc5ecc610ce262b02c64974540fcec9))
+* ephemeral ([b697cd9](https://github.com/sergelogvinov/mimiops-mcp/commit/b697cd98aa3dd22159ac23370dbb1cc53ac99188))
+* formatter ([7ec7ab5](https://github.com/sergelogvinov/mimiops-mcp/commit/7ec7ab5efe7f26b7cae986d97892f6ed1758776c))
+* goreleaser ([58622b8](https://github.com/sergelogvinov/mimiops-mcp/commit/58622b84b71a6390464ffdc390ea8cfc0d767c17))
+* helm rollback ([8969465](https://github.com/sergelogvinov/mimiops-mcp/commit/89694656e6f982945b8dfee0802a873b9a517c83))
+* karpenter nodepool ([281af7a](https://github.com/sergelogvinov/mimiops-mcp/commit/281af7a4b49194be827ff20f1be788d29941f09a))
+* workloads describe ([b5fe9c3](https://github.com/sergelogvinov/mimiops-mcp/commit/b5fe9c3249b8d5857e8175e7165e4a4088cb10d9))
+* workloads restart ([a8e658d](https://github.com/sergelogvinov/mimiops-mcp/commit/a8e658df221df8e5de3dad591e094459b566faab))
+
 ## [0.3.0](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.2.1...v0.3.0) (2026-08-26)
 
 
