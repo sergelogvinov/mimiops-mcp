@@ -46,7 +46,7 @@ var defaultSensitiveKeys = []string{
 // (e.g. db_password, access_token). See docs/logs.md §4.1.
 var defaultKeyPatterns = []string{
 	`(?i)(password|passwd|pwd)\b`,
-	`(?i)(token|secret|apikey|api_key)\b`,
+	`(?i)(token|secret|credential|creds|apikey|api_key)\b`,
 	`(?i)(card|cc|cvv|cvc)\b`,
 	`(?i)(phone|telephone|mobile|tel)\b`,
 }
@@ -66,12 +66,18 @@ var defaultValuePatterns = []string{
 	`(?P<jwt>eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)`,
 	// GitHub tokens.
 	`(?P<github>gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})`,
+	// Gitlab tokens.
+	`(?P<gitlab>glpat-[A-Za-z0-9]{20,})`,
 	// Slack tokens.
 	`(?P<slack>xox[baprs]-[A-Za-z0-9-]+)`,
 	// AWS access key id.
-	`(?P<aws>AKIA[0-9A-Z]{16})`,
+	`(?P<aws>(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16})`,
+	// GCP access key id.
+	`(?P<gcp>AIza[\w-]{35})`,
 	// Stripe live/test keys.
 	`(?P<stripe>(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{16,})`,
+	// Twilio tokens.
+	`(?P<twilio>SK[0-9a-fA-F]{32})`,
 	// URL credentials are handled by urlCredentialRe (added separately so it
 	// can be rebuilt with scheme/host preserved). Listed here only as a
 	// placeholder; the actual compiled regex is urlCredentialRe.
