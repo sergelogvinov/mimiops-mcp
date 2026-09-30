@@ -34,6 +34,6 @@ FROM --platform=${TARGETARCH} scratch AS release
 
 COPY --from=gcr.io/distroless/static-debian13:nonroot . .
 ARG TARGETPLATFORM
-COPY ${TARGETPLATFORM}/bin/mimiops-mcp /bin/mimiops-mcp
+COPY ${TARGETPLATFORM}/mimiops-mcp /bin/mimiops-mcp
 
 ENTRYPOINT ["/bin/mimiops-mcp"]

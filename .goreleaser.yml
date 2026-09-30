@@ -6,7 +6,7 @@ dist: bin
 builds:
   - id: default
     main: ./cmd/mimiops-mcp
-    binary: bin/mimiops-mcp
+    binary: mimiops-mcp
     env:
       - CGO_ENABLED=0
     flags:
@@ -94,14 +94,12 @@ dockers_v2:
       - "ghcr.io/sergelogvinov/{{ .ProjectName }}"
     tags:
       - "v{{.Version}}"
-      - "{{ if not .IsNightly }}latest{{ end }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
     platforms:
       - linux/amd64
       - linux/arm64
     labels:
       io.modelcontextprotocol.server.name: "io.github.sergelogvinov/{{ .ProjectName }}"
-      io.artifacthub.package.readme-url: "https://raw.githubusercontent.com/sergelogvinov/{{ .ProjectName }}/main/README.md"
-      io.artifacthub.package.license: "Apache-2.0"
     annotations:
       org.opencontainers.image.name: "{{ .ProjectName }}"
       org.opencontainers.image.description: "MimiOps is an opinionated MCP server for Kubernetes"
