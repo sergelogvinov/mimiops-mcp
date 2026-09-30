@@ -29,23 +29,9 @@ import (
 	"github.com/sergelogvinov/mimiops-mcp/pkg/formatter"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
-
-// ContainerUsage holds the current resource usage of one container from the metrics API.
-type ContainerUsage struct {
-	Name   string `json:"name" jsonschema:"Name of the container"`
-	CPU    string `json:"cpu" jsonschema:"Current CPU usage (millicores)"`
-	Memory string `json:"memory" jsonschema:"Current memory usage"`
-}
-
-// PodUsage holds the current resource usage of a pod from the metrics API.
-type PodUsage struct {
-	CPU        string           `json:"cpu" jsonschema:"Current CPU usage (millicores)"`
-	Memory     string           `json:"memory" jsonschema:"Current memory usage"`
-	Containers []ContainerUsage `json:"containers,omitempty" jsonschema:"Per-container usage"`
-}
 
 // PodDescribeResult represents the result of describing a pod.
 type PodDescribeResult struct {
@@ -56,7 +42,7 @@ type PodDescribeResult struct {
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 
 	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"Conditions"`
-	Usage      *PodUsage       `json:"usage,omitempty" jsonschema:"Current resource usage from the metrics API"`
+	Usage      *ResourceUsage  `json:"usage,omitempty" jsonschema:"Resource usage from the metrics API"`
 	Events     []EventSummary  `json:"events,omitempty" jsonschema:"List of events"`
 }
 
@@ -67,7 +53,7 @@ func RegisterPodsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("Describe Pod"),
-		mcp.WithDescription("Pod summary (conditions, container statuses, current usage, node, tolerations)"),
+		mcp.WithDescription("Pod summary (conditions, container statuses, usage, node, tolerations)"),
 		mcp.WithString("name", mcp.Description("pod name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[PodDescribeResult](),
@@ -120,10 +106,21 @@ func handlerPodsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, r
 	}
 }
 
-// fetchPodUsage fetches the pod's current resource usage from the metrics API.
-// It returns nil when the metrics API is unavailable (e.g., no metrics-server),
+// fetchPodUsage fetches the pod's resource usage. It prefers the windowed
+// averages from custom.metrics.k8s.io and falls back to the point-in-time
+// values from metrics.k8s.io. It returns nil when neither API is available,
 // so the describe result degrades gracefully without usage data.
-func fetchPodUsage(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *PodUsage {
+func fetchPodUsage(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *ResourceUsage {
+	if usage := fetchCustomUsage(ctx, client, schema.GroupKind{Kind: "Pod"}, pod.Namespace, pod.Name, pod.UID); usage != nil {
+		return usage
+	}
+
+	return fetchPodMetricsUsage(ctx, client, pod)
+}
+
+// fetchPodMetricsUsage fetches the pod's current resource usage from metrics.k8s.io.
+// It returns nil when the metrics API is unavailable (e.g., no metrics-server).
+func fetchPodMetricsUsage(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *ResourceUsage {
 	log := logger.FromContext(ctx)
 
 	metricsClient, err := client.Metrics()
@@ -139,29 +136,7 @@ func fetchPodUsage(ctx context.Context, client *k8s.Client, pod *corev1.Pod) *Po
 		return nil
 	}
 
-	usage := &PodUsage{
-		Containers: make([]ContainerUsage, 0, len(podMetrics.Containers)),
-	}
-
-	var cpu, mem resource.Quantity
-	for _, c := range podMetrics.Containers {
-		cu := ContainerUsage{Name: c.Name}
-		if q, ok := c.Usage[corev1.ResourceCPU]; ok {
-			cu.CPU = fmt.Sprintf("%dm", q.MilliValue())
-			cpu.Add(q)
-		}
-		if q, ok := c.Usage[corev1.ResourceMemory]; ok {
-			cu.Memory = q.String()
-			mem.Add(q)
-		}
-
-		usage.Containers = append(usage.Containers, cu)
-	}
-
-	usage.CPU = fmt.Sprintf("%dm", cpu.MilliValue())
-	usage.Memory = mem.String()
-
-	return usage
+	return sumContainerUsage(podMetrics.Containers, true)
 }
 
 // +kubebuilder:rbac:groups="",resources=events,verbs=list;watch

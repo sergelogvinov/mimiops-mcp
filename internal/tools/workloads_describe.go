@@ -30,6 +30,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // WorkloadDescribeResult represents the result of describing a workload.
@@ -41,6 +42,7 @@ type WorkloadDescribeResult struct {
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 
 	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"Conditions"`
+	Usage      *ResourceUsage  `json:"usage,omitempty" jsonschema:"Resource usage of all workload pods from the metrics API"`
 	Events     []EventSummary  `json:"events,omitempty" jsonschema:"List of events"`
 
 	Pods []PodSummary `json:"pods,omitempty" jsonschema:"List of pods owned by the workload"`
@@ -48,14 +50,14 @@ type WorkloadDescribeResult struct {
 
 // RegisterWorkloadsDescribe adds the workloads_describe tool, which provides
 // a rich structured summary of a workload: replicas, conditions, selector,
-// strategy, update history.
+// strategy, update history, usage.
 func RegisterWorkloadsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 	opts := append([]mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("Describe Workload"),
-		mcp.WithDescription("Workload summary (replicas, conditions, selector, strategy, update history)."),
+		mcp.WithDescription("Workload summary (replicas, conditions, selector, strategy, update history, usage)."),
 		mcp.WithString("name", mcp.Description("workload name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("kind: deployment, statefulset, or daemonset"), mcp.Enum("deployment", "statefulset", "daemonset")),
@@ -123,6 +125,7 @@ func handlerWorkloadsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Conte
 }
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=list;watch
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=list;watch
 
 // buildWorkloadDescribeResult builds a WorkloadDescribeResult from a workload object.
@@ -136,7 +139,7 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		result.WorkloadSummary = toWorkloadSummaryDeployment(w)
 		result.Labels = extractLabels(w.Labels)
 		result.Annotations = extractAnnotations(w.Annotations)
-		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
+		result.Selector = formatLabelSelector(w.Spec.Selector)
 		result.UpdateStrategy = string(w.Spec.Strategy.Type)
 		result.PodSpec = toPodSpec("", &w.Spec.Template.Spec)
 
@@ -154,7 +157,7 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		result.WorkloadSummary = toWorkloadSummaryStatefulSet(w)
 		result.Labels = extractLabels(w.Labels)
 		result.Annotations = extractAnnotations(w.Annotations)
-		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
+		result.Selector = formatLabelSelector(w.Spec.Selector)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
 		result.PodSpec = toPodSpec("", &w.Spec.Template.Spec)
 
@@ -172,7 +175,7 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		result.WorkloadSummary = toWorkloadSummaryDaemonSet(w)
 		result.Labels = extractLabels(w.Labels)
 		result.Annotations = extractAnnotations(w.Annotations)
-		result.Selector = formatMatchLabels(w.Spec.Selector.MatchLabels)
+		result.Selector = formatLabelSelector(w.Spec.Selector)
 		result.UpdateStrategy = string(w.Spec.UpdateStrategy.Type)
 		result.PodSpec = toPodSpec("", &w.Spec.Template.Spec)
 
@@ -186,26 +189,15 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		}
 	}
 
-	pods, err := client.CoreV1().Pods(result.Namespace).List(ctx, metav1.ListOptions{LabelSelector: result.Selector})
-	if err == nil {
-		result.Pods = make([]PodSummary, 0, len(pods.Items))
-		for _, pod := range pods.Items {
-			node := pod.Spec.NodeName
-			if node == "" {
-				node = "<pending>"
-			}
-
-			podInfo := PodSummary{
-				Name:     pod.Name,
-				Ready:    formatReady(pod.Status),
-				Status:   string(pod.Status.Phase),
-				Restarts: containerRestartCount(pod.Status),
-				Age:      age.FormatAge(pod.CreationTimestamp),
-				Node:     node,
-			}
-
-			result.Pods = append(result.Pods, podInfo)
+	// An empty selector would match every pod in the namespace.
+	if kind != "" && result.Selector != "" {
+		uid := workload.(metav1.Object).GetUID()
+		result.Usage = fetchCustomUsage(ctx, client, schema.GroupKind{Group: appsv1.GroupName, Kind: kind}, result.Namespace, result.Name, uid)
+		if result.Usage == nil {
+			result.Usage = fetchSelectorMetricsUsage(ctx, client, result.Namespace, result.Selector)
 		}
+
+		result.Pods = listSelectorPods(ctx, client, result.Namespace, result.Selector)
 	}
 
 	// List events for the workload
@@ -237,6 +229,34 @@ func buildWorkloadDescribeResult(ctx context.Context, workload any, client *k8s.
 		if len(result.Events) > 50 {
 			result.Events = result.Events[:50]
 		}
+	}
+
+	return result
+}
+
+// listSelectorPods lists the pods matching selector as summaries. It returns
+// nil when the pods cannot be listed.
+func listSelectorPods(ctx context.Context, client *k8s.Client, namespace, selector string) []PodSummary {
+	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return nil
+	}
+
+	result := make([]PodSummary, 0, len(pods.Items))
+	for _, pod := range pods.Items {
+		node := pod.Spec.NodeName
+		if node == "" {
+			node = "<pending>"
+		}
+
+		result = append(result, PodSummary{
+			Name:     pod.Name,
+			Ready:    formatReady(pod.Status),
+			Status:   string(pod.Status.Phase),
+			Restarts: containerRestartCount(pod.Status),
+			Age:      age.FormatAge(pod.CreationTimestamp),
+			Node:     node,
+		})
 	}
 
 	return result

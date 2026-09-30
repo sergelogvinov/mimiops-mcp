@@ -19,6 +19,7 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -52,7 +53,29 @@ type Config struct {
 	// OIDCClientSecret is the upstream client secret used for the
 	// authorization-code exchange in proxy mode. Optional (public clients).
 	OIDCClientSecret string
+
+	// UsageWindow is the averaging window of the custom.metrics.k8s.io usage
+	// metrics (<base>_avg_<window>, e.g. cpu_avg_30m). Empty disables them,
+	// so describe tools use metrics.k8s.io only.
+	UsageWindow string
 }
+
+// ParseUsageWindow validates a usage window: empty, or a positive integer
+// followed by a unit s, m, h or d (e.g. 30m).
+func ParseUsageWindow(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+
+	if !usageWindowPattern.MatchString(value) {
+		return "", fmt.Errorf("invalid usage window %q: expected a number followed by s, m, h or d (e.g. 30m)", value)
+	}
+
+	return value, nil
+}
+
+var usageWindowPattern = regexp.MustCompile(`^[1-9][0-9]*[smhd]$`)
 
 // ParseScopes normalizes a comma- or space-separated scope list: entries
 // are trimmed, empty entries dropped, and duplicates removed, preserving

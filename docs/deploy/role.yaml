@@ -103,6 +103,20 @@ rules:
   - list
   - watch
 - apiGroups:
+  - custom.metrics.k8s.io
+  resources:
+  - cronjobs.batch/*
+  - daemonsets.apps/*
+  - deployments.apps/*
+  - jobs.batch/*
+  - nodes/*
+  - pods/*
+  - statefulsets.apps/*
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - discovery.k8s.io
   resources:
   - endpointslices

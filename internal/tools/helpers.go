@@ -107,6 +107,22 @@ func formatDuration(end, start metav1.Time) string {
 	return fmt.Sprintf("%dd", int(diff.Hours()/24))
 }
 
+// formatLabelSelector converts a label selector, including matchExpressions,
+// to its string form (e.g. "app=web,tier in (api,worker)"). It returns an
+// empty string for a nil or invalid selector.
+func formatLabelSelector(selector *metav1.LabelSelector) string {
+	if selector == nil {
+		return ""
+	}
+
+	s, err := metav1.LabelSelectorAsSelector(selector)
+	if err != nil {
+		return ""
+	}
+
+	return s.String()
+}
+
 // formatMatchLabels converts match labels to a comma-separated string.
 func formatMatchLabels(labels map[string]string) string {
 	if len(labels) == 0 {

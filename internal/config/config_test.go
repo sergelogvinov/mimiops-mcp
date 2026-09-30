@@ -72,3 +72,33 @@ func TestParseEmailDomains(t *testing.T) {
 		})
 	}
 }
+
+func TestParseUsageWindow(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		want    string
+		wantErr bool
+	}{
+		{name: "empty disables", value: "", want: ""},
+		{name: "whitespace only", value: "  ", want: ""},
+		{name: "minutes", value: "30m", want: "30m"},
+		{name: "hours trimmed", value: " 1h ", want: "1h"},
+		{name: "no unit", value: "30", wantErr: true},
+		{name: "zero", value: "0m", wantErr: true},
+		{name: "compound duration", value: "1h30m", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseUsageWindow(tt.value)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
