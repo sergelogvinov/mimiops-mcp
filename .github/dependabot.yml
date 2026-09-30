@@ -14,6 +14,15 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "UTC"
+    groups:
+      actions:
+        patterns:
+          - "actions/*"
+          - "azure/*"
+          - "docker/*"
+      other:
+        patterns:
+          - "golangci/*"
 
   - package-ecosystem: "gomod"
     directory: "/"
@@ -29,14 +38,13 @@ updates:
     groups:
       k8s.io:
         patterns:
-          - "k8s.io/api"
-          - "k8s.io/apimachinery"
-          - "k8s.io/cli-runtime"
-          - "k8s.io/client-go"
+          - "k8s.io/*"
       spf13:
         patterns:
-          - "github.com/spf13/cobra"
-          - "github.com/spf13/pflag"
+          - "github.com/spf13/*"
+      fluxcd:
+        patterns:
+          - "github.com/fluxcd/*"
 
   - package-ecosystem: "docker"
     directory: "/"
