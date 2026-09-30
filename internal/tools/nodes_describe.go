@@ -31,15 +31,30 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// NodeUsage holds the current resource usage of a node from the metrics API.
+// NodeUsage holds the resource usage of a node from the metrics API.
+//
+// The two sources measure memory differently, so Basis states what the values
+// mean: custom.metrics.k8s.io reports whole-node used memory (MemTotal -
+// MemAvailable, including kernel and system-reserved memory) against capacity,
+// metrics.k8s.io reports the node working set against allocatable, as kubectl top does.
 type NodeUsage struct {
-	CPU           string `json:"cpu" jsonschema:"Current CPU usage"`
-	CPUPercent    string `json:"cpu_percent" jsonschema:"CPU usage percentage of allocatable"`
-	Memory        string `json:"memory" jsonschema:"Current memory usage"`
-	MemoryPercent string `json:"memory_percent" jsonschema:"Memory usage percentage of allocatable"`
+	Window        string `json:"window,omitempty" jsonschema:"Averaging window of the usage values (custom.metrics.k8s.io only)"`
+	Basis         string `json:"basis" jsonschema:"What the usage values measure and the total the percentages are relative to"`
+	CPU           string `json:"cpu" jsonschema:"CPU usage"`
+	CPUPercent    string `json:"cpu_percent" jsonschema:"CPU usage percentage of capacity or allocatable (see basis)"`
+	Memory        string `json:"memory" jsonschema:"Memory usage"`
+	MemoryPercent string `json:"memory_percent" jsonschema:"Memory usage percentage of capacity or allocatable (see basis)"`
 }
+
+const (
+	// nodeUsageBasisCustom describes node usage from custom.metrics.k8s.io.
+	nodeUsageBasisCustom = "node used memory (MemTotal - MemAvailable, includes system memory) and CPU, percent of capacity"
+	// nodeUsageBasisMetrics describes node usage from metrics.k8s.io.
+	nodeUsageBasisMetrics = "node working set memory and CPU, percent of allocatable"
+)
 
 // NodeDescribeResult represents the result of describing a node.
 type NodeDescribeResult struct {
@@ -52,7 +67,7 @@ type NodeDescribeResult struct {
 	Addresses          []NodeAddressInfo `json:"addresses,omitempty" jsonschema:"Node addresses"`
 	Conditions         []ConditionInfo   `json:"conditions,omitempty" jsonschema:"List of conditions"`
 	AllocatedResources NodeAllocations   `json:"allocated_resources" jsonschema:"Allocated resources (requests and limits vs allocatable)"`
-	Usage              *NodeUsage        `json:"usage,omitempty" jsonschema:"Current resource usage from the metrics API"`
+	Usage              *NodeUsage        `json:"usage,omitempty" jsonschema:"Resource usage from the metrics API"`
 	Pods               []NodePodInfo     `json:"pods,omitempty" jsonschema:"Pods running on the node (capped at 20)"`
 	Events             []EventSummary    `json:"events,omitempty" jsonschema:"List of events"`
 }
@@ -64,7 +79,7 @@ func RegisterNodesDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("Describe Node"),
-		mcp.WithDescription("Node summary (conditions, addresses, taints, allocated resources, current usage, pods, events)"),
+		mcp.WithDescription("Node summary (conditions, addresses, taints, allocated resources, usage, pods, events)"),
 		mcp.WithString("name", mcp.Description("node name"), mcp.Required()),
 		mcp.WithOutputSchema[NodeDescribeResult](),
 	}, clusters.ClusterOptions(mc)...)
@@ -167,10 +182,28 @@ func buildNodeDescribeResult(ctx context.Context, client *k8s.Client, node *core
 // +kubebuilder:rbac:groups="",resources=pods,verbs=list;watch
 // +kubebuilder:rbac:groups=metrics.k8s.io,resources=nodes,verbs=get;list;watch
 
-// fetchNodeUsage fetches the node's current resource usage from the metrics API.
-// It returns nil when the metrics API is unavailable (e.g., no metrics-server),
+// fetchNodeUsage fetches the node's resource usage. It prefers the windowed
+// averages from custom.metrics.k8s.io and falls back to the point-in-time
+// values from metrics.k8s.io. It returns nil when neither API is available,
 // so the describe result degrades gracefully without usage data.
 func fetchNodeUsage(ctx context.Context, client *k8s.Client, node *corev1.Node) *NodeUsage {
+	if usage := fetchCustomQuantities(ctx, client, schema.GroupKind{Kind: "Node"}, "", node.Name, node.UID); usage != nil {
+		return &NodeUsage{
+			Window:        usage.window,
+			Basis:         nodeUsageBasisCustom,
+			CPU:           formatCPU(usage.cpu),
+			CPUPercent:    quantityPercent(&usage.cpu, node.Status.Capacity.Cpu()),
+			Memory:        formatMemory(usage.mem),
+			MemoryPercent: quantityPercent(&usage.mem, node.Status.Capacity.Memory()),
+		}
+	}
+
+	return fetchNodeMetricsUsage(ctx, client, node)
+}
+
+// fetchNodeMetricsUsage fetches the node's current resource usage from metrics.k8s.io.
+// It returns nil when the metrics API is unavailable (e.g., no metrics-server).
+func fetchNodeMetricsUsage(ctx context.Context, client *k8s.Client, node *corev1.Node) *NodeUsage {
 	log := logger.FromContext(ctx)
 
 	metricsClient, err := client.Metrics()
@@ -186,13 +219,13 @@ func fetchNodeUsage(ctx context.Context, client *k8s.Client, node *corev1.Node) 
 		return nil
 	}
 
-	usage := &NodeUsage{}
+	usage := &NodeUsage{Basis: nodeUsageBasisMetrics}
 	if q, ok := nodeMetrics.Usage[corev1.ResourceCPU]; ok {
-		usage.CPU = fmt.Sprintf("%dm", q.MilliValue())
+		usage.CPU = formatCPU(q)
 		usage.CPUPercent = quantityPercent(&q, node.Status.Allocatable.Cpu())
 	}
 	if q, ok := nodeMetrics.Usage[corev1.ResourceMemory]; ok {
-		usage.Memory = q.String()
+		usage.Memory = formatMemory(q)
 		usage.MemoryPercent = quantityPercent(&q, node.Status.Allocatable.Memory())
 	}
 

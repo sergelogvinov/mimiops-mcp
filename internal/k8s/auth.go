@@ -89,6 +89,7 @@ func (mc *MultiClusterClient) newClientForClusterWithToken(contextName string, a
 		Namespace:   namespace,
 		User:        user,
 		sanitizer:   mc.sanitizer,
+		usageWindow: mc.cfg.UsageWindow,
 	}, nil
 }
 
@@ -135,6 +136,7 @@ func (mc *MultiClusterClient) newInClusterClientWithToken(restConfig *rest.Confi
 		Namespace:   namespace,
 		User:        user,
 		sanitizer:   mc.sanitizer,
+		usageWindow: mc.cfg.UsageWindow,
 	}, nil
 }
 

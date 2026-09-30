@@ -18,6 +18,8 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -28,6 +30,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // CronJobDescribeResult represents the result of describing a CronJob.
@@ -38,7 +41,8 @@ type CronJobDescribeResult struct {
 	Labels      map[string]string `json:"labels" jsonschema:"Labels of the CronJob"`
 	Annotations map[string]string `json:"annotations" jsonschema:"Annotations of the CronJob"`
 
-	ActiveJobs []string `json:"activeJobs" jsonschema:"List of active job names"`
+	ActiveJobs []string       `json:"activeJobs" jsonschema:"List of active job names"`
+	Usage      *ResourceUsage `json:"usage,omitempty" jsonschema:"Resource usage of the CronJob pods from the metrics API"`
 }
 
 // RegisterCronJobsDescribe adds the cronjobs_describe tool, which provides a structured CronJob summary.
@@ -48,7 +52,7 @@ func RegisterCronJobsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("Describe CronJob"),
-		mcp.WithDescription("CronJob summary (schedule, suspend, concurrency policy, active jobs, last schedule, job template)"),
+		mcp.WithDescription("CronJob summary (schedule, suspend, concurrency policy, active jobs, last schedule, job template, usage)"),
 		mcp.WithString("name", mcp.Description("CronJob name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[CronJobDescribeResult](),
@@ -59,6 +63,7 @@ func RegisterCronJobsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 }
 
 // +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=list;watch
 
 // handlerCronJobsDescribe returns a handler function for the cronjobs_describe tool.
 func handlerCronJobsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -94,7 +99,7 @@ func handlerCronJobsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Contex
 			return mcp.NewToolResultErrorf("failed to get CronJob '%s' in namespace '%s': %v", name, namespace, err), nil
 		}
 
-		result, err := buildCronJobDescribeResult(cronJob)
+		result, err := buildCronJobDescribeResult(ctx, cronJob, client)
 		if err != nil {
 			return mcp.NewToolResultErrorf("failed to build result: %v", err), nil
 		}
@@ -104,7 +109,7 @@ func handlerCronJobsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Contex
 }
 
 // buildCronJobDescribeResult builds a CronJobDescribeResult from a CronJob.
-func buildCronJobDescribeResult(cj *batchv1.CronJob) (*CronJobDescribeResult, error) {
+func buildCronJobDescribeResult(ctx context.Context, cj *batchv1.CronJob, client *k8s.Client) (*CronJobDescribeResult, error) {
 	result := &CronJobDescribeResult{
 		CronJobSummary: toCronJobSummary(cj),
 		CronJobSpec:    toCronJobSpec(cj),
@@ -116,6 +121,19 @@ func buildCronJobDescribeResult(cj *batchv1.CronJob) (*CronJobDescribeResult, er
 	// Active Jobs
 	for _, job := range cj.Status.Active {
 		result.ActiveJobs = append(result.ActiveJobs, job.Name)
+	}
+
+	// Usage - windowed usage across CronJob runs, or current usage of the active Jobs' pods.
+	// Pods of the active Jobs are selected by their batch.kubernetes.io/controller-uid label.
+	result.Usage = fetchCustomUsage(ctx, client, schema.GroupKind{Group: batchv1.GroupName, Kind: "CronJob"}, cj.Namespace, cj.Name, cj.UID)
+	if result.Usage == nil && len(cj.Status.Active) > 0 {
+		uids := make([]string, 0, len(cj.Status.Active))
+		for _, job := range cj.Status.Active {
+			uids = append(uids, string(job.UID))
+		}
+
+		selector := fmt.Sprintf("batch.kubernetes.io/controller-uid in (%s)", strings.Join(uids, ","))
+		result.Usage = fetchSelectorMetricsUsage(ctx, client, cj.Namespace, selector)
 	}
 
 	return result, nil

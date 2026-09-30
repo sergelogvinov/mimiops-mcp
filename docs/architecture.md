@@ -173,7 +173,7 @@ require (
     k8s.io/api v0.35.0                       // K8s API types
     k8s.io/apimachinery v0.35.0              // API machinery
     k8s.io/client-go v0.35.0                 // typed clientset
-    k8s.io/metrics v0.36.4                   // metrics (current usage in nodes_describe/pods_describe, optional)
+    k8s.io/metrics v0.36.4                   // metrics + custom metrics (usage in *_describe, optional)
     helm.sh/helm/v3 v3.21.3                  // Helm SDK (Go library, no binary)
     github.com/spf13/pflag v1.0.10           // Flags
     github.com/spf13/cobra v1.10.2           // CLI command dispatch
@@ -218,7 +218,7 @@ The binary exposes cobra subcommands that select the transport: `mcp` runs stdio
 ```
 mimiops-mcp
 ├── (global persistent flags)
-│     --kubeconfig, --context, --namespace, --impersonate, --allow-destructive, --log-level
+│     --kubeconfig, --context, --namespace, --impersonate, --allow-destructive, --log-level, --usage-window
 ├── mcp        # Serve the MCP protocol over stdio (inherits global flags)
 ├── server     # Serve the MCP protocol over HTTP SSE (global flags + --port)
 │     --port  # local, server only
@@ -314,7 +314,7 @@ Legend: **R** read-only, **D** destructive (registered only when `--allow-destru
 
 #### `pods_describe`
 
-- `pods_describe` (R) — rich summary: status, phase, conditions, container states, current usage (metrics API, omitted without metrics-server), node, recent events (fetched via `events_list` core filtered by pod UID).
+- `pods_describe` (R) — rich summary: status, phase, conditions, container states, usage (windowed `<base>_avg_<window>` averages from custom.metrics.k8s.io when an adapter serves them, window set by `--usage-window`, default `30m`; else point-in-time metrics.k8s.io; omitted when neither is available); per-container breakdown only from metrics.k8s.io, node, recent events (fetched via `events_list` core filtered by pod UID).
 - **params** `name` (required), `namespace` (required).
 
 #### `pods_log`
@@ -334,7 +334,7 @@ All four workload tools accept `kind` as **optional**. When omitted, `resolveWor
 
 - `workloads_list` (R) — `WorkloadListResult` → `[]WorkloadSummary{kind, namespace, name, ready, desired, age}`. `kind` omitted lists all three merged into one table.
 - `workloads_get` (R) — `WorkloadResult` → full `apps/v1` object (`Deployment`/`StatefulSet`/`DaemonSet`).
-- `workloads_describe` (R) — rich summary: replicas, conditions, selector, strategy, update history.
+- `workloads_describe` (R) — rich summary: replicas, conditions, selector, strategy, update history, usage (windowed `<base>_avg_<window>` averages from custom.metrics.k8s.io when an adapter serves them, window set by `--usage-window`, default `30m`; else point-in-time metrics.k8s.io; omitted when neither is available).
 - `workloads_scale` (D) — `Scale` object (`kind`, `namespace`, `name`, `replicas`). Params: `name` (req), `namespace` (req), `replicas` (int, req, min 0), `kind` (opt, deployment|statefulset). DaemonSets cannot be scaled (no `spec.replicas`) → error. Uses the `scale` subresource (`UpdateScale`). **Single-phase, no `confirm`.**
 - `hpa_list` (R) — `HPAListResult` → `[]HPASummary{namespace, name, reference, targets, min_pods, max_pods, replicas, age}`. `namespace` opt (empty = all). `targets` is kubectl-style `current/target` per metric (e.g., `50%/80%`).
 - `hpa_describe` (R) — `HPADescribeResult` — summary + desired replicas, last scale time, behavior policies, conditions, events (capped at 50).
@@ -345,11 +345,11 @@ Read:
 
 - `jobs_list` (R) — `JobListResult` → `[]JobSummary{namespace, name, completions, duration, age, status}`. Status: Complete/Failed/Running/Pending.
 - `jobs_get` (R) — full `batch/v1.Job`.
-- `jobs_describe` (R) — parallelism, completions, backoff, conditions, selector, owned pods (capped at 5).
+- `jobs_describe` (R) — parallelism, completions, backoff, conditions, selector, usage (windowed `<base>_avg_<window>` averages from custom.metrics.k8s.io when an adapter serves them, window set by `--usage-window`, default `30m`; else point-in-time metrics.k8s.io; omitted when neither is available), owned pods (capped at 5).
 - `jobs_log` (R) — `JobLogResult` embeds `JobSummary` + `Streams []LogStream`. Params incl. `all_pods` (default false → most recent pod only).
 - `cronjobs_list` (R) — `CronJobListResult` → `[]CronJobSummary{namespace, name, schedule, suspend, status, last_schedule, age}`.
 - `cronjobs_get` (R) — full `batch/v1.CronJob`.
-- `cronjobs_describe` (R) — schedule, suspend, concurrency policy, active jobs (capped at 5), last schedule, job template summary.
+- `cronjobs_describe` (R) — schedule, suspend, concurrency policy, active jobs (capped at 5), last schedule, job template summary, usage (windowed `<base>_avg_<window>` averages from custom.metrics.k8s.io when an adapter serves them, window set by `--usage-window`, default `30m`; else point-in-time metrics.k8s.io; omitted when neither is available).
 
 Mutating (D, single-phase — gated only by `--allow-destructive`, **no `confirm`/`input_required`**):
 
@@ -368,7 +368,7 @@ All read-only, registered unconditionally. The `--namespace` flag scopes the nam
 | -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `nodes_list` (R)           | `NodeListResult` → `[]NodeSummary`   | `include_allocations` (bool, opt, default false) computes per-node CPU/mem request & limit sums from pods; shown `request/allocatable` |
 | `nodes_get` (R)            | `NodeResult`                         | Always computes allocated-resource totals; `include_pods` (bool, opt, default false) adds pod summary (capped at 15)                   |
-| `nodes_describe` (R)       | `NodeDescribeResult`                 | conditions, addresses, taints, allocated resources (`used (percent%)`), current usage (metrics API, omitted without metrics-server), pods (capped at 20), events                                   |
+| `nodes_describe` (R)       | `NodeDescribeResult`                 | conditions, addresses, taints, allocated resources (`used (percent%)`), usage (windowed `<base>_avg_<window>` averages from custom.metrics.k8s.io when an adapter serves them, window set by `--usage-window`, default `30m`; else point-in-time metrics.k8s.io; omitted when neither is available); `basis` states the meaning: custom-metrics node memory is MemTotal − MemAvailable as percent of capacity, metrics.k8s.io is working set as percent of allocatable, pods (capped at 20), events                                   |
 | `namespaces_list` (R)      | `NamespaceListResult`                | `status`, `age`                                                                                                                        |
 | `namespaces_get` (R)       | `NamespaceResult`                    | full `v1.Namespace`                                                                                                                   |
 | `namespaces_describe` (R)  | `NamespaceDescribeResult`            | includes the namespace's ResourceQuotas (`resource/used/hard` rows) and LimitRanges (typed `spec.limits`)                              |

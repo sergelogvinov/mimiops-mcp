@@ -30,6 +30,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // JobDescribeResult represents the result of describing a Job.
@@ -41,6 +42,7 @@ type JobDescribeResult struct {
 	Labels      map[string]string `json:"labels" jsonschema:"Labels"`
 
 	Conditions []ConditionInfo `json:"conditions,omitempty" jsonschema:"List of conditions of the Job"`
+	Usage      *ResourceUsage  `json:"usage,omitempty" jsonschema:"Resource usage of all Job pods from the metrics API"`
 	Pods       []PodSummary    `json:"pods,omitempty" jsonschema:"List of pods owned by the Job"`
 }
 
@@ -51,7 +53,7 @@ func RegisterJobsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithToolTitle("Describe Job"),
-		mcp.WithDescription("Job summary (conditions, parallelism, completions, backoff, active pods list)."),
+		mcp.WithDescription("Job summary (conditions, parallelism, completions, backoff, usage, active pods list)."),
 		mcp.WithString("name", mcp.Description("Job name"), mcp.Required()),
 		mcp.WithString("namespace", mcp.Description("namespace"), mcp.Required()),
 		mcp.WithOutputSchema[JobDescribeResult](),
@@ -64,6 +66,7 @@ func RegisterJobsDescribe(s *server.MCPServer, mc *k8s.MultiClusterClient) {
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=list;watch
 
 // handlerJobsDescribe returns a handler function for the jobs_describe tool.
 func handlerJobsDescribe(mc *k8s.MultiClusterClient) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -128,9 +131,21 @@ func buildJobDescribeResult(ctx context.Context, job *batchv1.Job, client *k8s.C
 		})
 	}
 
+	// The Job's own selector matches its pods whatever labels the Job
+	// controller version sets, including manualSelector Jobs.
+	selector := formatLabelSelector(job.Spec.Selector)
+	if selector == "" {
+		selector = fmt.Sprintf("batch.kubernetes.io/job-name=%s", job.Name)
+	}
+
+	result.Usage = fetchCustomUsage(ctx, client, schema.GroupKind{Group: batchv1.GroupName, Kind: "Job"}, job.Namespace, job.Name, job.UID)
+	if result.Usage == nil {
+		result.Usage = fetchSelectorMetricsUsage(ctx, client, job.Namespace, selector)
+	}
+
 	// Pods - list pods by Job
 	pods, err := client.CoreV1().Pods(job.Namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("batch.kubernetes.io/job-name=%s", job.Name),
+		LabelSelector: selector,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods: %w", err)

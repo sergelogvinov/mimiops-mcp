@@ -19,13 +19,23 @@ package k8s
 
 import (
 	"sync"
+	"time"
 
 	"github.com/sergelogvinov/mimiops-mcp/internal/utils"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/discovery"
+	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
+	"k8s.io/metrics/pkg/client/custom_metrics"
 )
+
+// customMetricsTimeout bounds every custom.metrics.k8s.io request. The
+// custom-metrics client accepts no context, so the timeout is the only way
+// to keep a slow or hung adapter from blocking the caller.
+const customMetricsTimeout = 10 * time.Second
 
 // Client is a Kubernetes clientset plus the resolved identity of the active
 // context/cluster/namespace, so callers can report *what* they are talking to.
@@ -39,6 +49,12 @@ type Client struct {
 	metricsOnce sync.Once
 	metrics     metricsclientset.Interface
 	metricsErr  error
+
+	customMetricsOnce sync.Once
+	customMetrics     custom_metrics.CustomMetricsClient
+	customMetricsErr  error
+
+	usageWindow string
 
 	// ContextName is the resolved active context (from --context or current-context).
 	ContextName string
@@ -89,6 +105,35 @@ func (c *Client) Metrics() (metricsclientset.Interface, error) {
 	})
 
 	return c.metrics, c.metricsErr
+}
+
+// CustomMetrics returns the custom.metrics.k8s.io client for the cluster, created lazily.
+// The API version is negotiated through discovery on first use, so callers must
+// handle request-time errors when no custom-metrics adapter is registered.
+func (c *Client) CustomMetrics() (custom_metrics.CustomMetricsClient, error) {
+	c.customMetricsOnce.Do(func() {
+		config := rest.CopyConfig(c.restConfig)
+		config.Timeout = customMetricsTimeout
+
+		discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+		if err != nil {
+			c.customMetricsErr = err
+			return
+		}
+
+		mapper := restmapper.NewDeferredDiscoveryRESTMapper(cacheddiscovery.NewMemCacheClient(discoveryClient))
+		availableAPIs := custom_metrics.NewAvailableAPIsGetter(discoveryClient)
+
+		c.customMetrics = custom_metrics.NewForConfig(config, mapper, availableAPIs)
+	})
+
+	return c.customMetrics, c.customMetricsErr
+}
+
+// UsageWindow returns the averaging window of the custom.metrics.k8s.io usage
+// metrics. Empty means custom metrics are disabled.
+func (c *Client) UsageWindow() string {
+	return c.usageWindow
 }
 
 // Sanitizer returns the log sanitizer for masking sensitive values in logs.

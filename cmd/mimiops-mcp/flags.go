@@ -37,6 +37,7 @@ const (
 	flagOIDCScope        = "oidc-scope"
 	flagOIDCEmailDomains = "oidc-email-domains"
 	flagOIDCCallbackURL  = "oidc-callback-url"
+	flagUsageWindow      = "usage-window"
 
 	envExtensions       = "EXTENSIONS"
 	envAllowDestructive = "ALLOW_DESTRUCTIVE"
@@ -49,6 +50,7 @@ const (
 	envOIDCScope        = "OIDC_SCOPE"
 	envOIDCEmailDomains = "OIDC_EMAIL_DOMAINS"
 	envOIDCCallbackURL  = "OIDC_CALLBACK_URL"
+	envUsageWindow      = "USAGE_WINDOW"
 
 	envKubeconfig  = "KUBECONFIG"
 	envContext     = "CONTEXT"
@@ -70,6 +72,8 @@ const (
 	defaultOIDCScope        = "openid profile email"
 	defaultOIDCEmailDomains = ""
 	defaultOIDCCallbackURL  = ""
+
+	defaultUsageWindow = "30m"
 )
 
 // Flags wraps genericclioptions.ConfigFlags and adds application-specific flags.
@@ -89,6 +93,8 @@ type Flags struct {
 	OIDCScope        string
 	OIDCEmailDomains string
 	OIDCCallbackURL  string
+
+	UsageWindow string
 }
 
 // DefaultFlags returns the default flags for the command,
@@ -122,6 +128,8 @@ func DefaultFlags() *Flags {
 		OIDCScope:        withDefaultEnv(envOIDCScope, defaultOIDCScope),
 		OIDCEmailDomains: withDefaultEnv(envOIDCEmailDomains, defaultOIDCEmailDomains),
 		OIDCCallbackURL:  withDefaultEnv(envOIDCCallbackURL, defaultOIDCCallbackURL),
+
+		UsageWindow: withDefaultEnv(envUsageWindow, defaultUsageWindow),
 	}
 }
 
@@ -141,6 +149,7 @@ func (f *Flags) AddPersistentFlags(flags *pflag.FlagSet) {
 	flags.StringVarP(&f.OIDCCallbackURL, flagOIDCCallbackURL, "", f.OIDCCallbackURL, "fixed OAuth callback URL registered with the issuer; enables the OAuth proxy flow when set (env: OIDC_CALLBACK_URL)")
 	flags.StringVarP(&f.OIDCClientSecret, flagOIDCClientSecret, "", f.OIDCClientSecret, "issuer client secret for the authorization-code exchange in proxy mode (env: OIDC_CLIENT_SECRET)")
 	flags.StringVarP(&f.OIDCScope, flagOIDCScope, "", f.OIDCScope, "space-separated OAuth scopes requested from the issuer; must include openid (default: openid profile email) (env: OIDC_SCOPE)")
+	flags.StringVarP(&f.UsageWindow, flagUsageWindow, "", f.UsageWindow, "averaging window of custom.metrics.k8s.io usage, empty disables it (default: 30m) (env: USAGE_WINDOW)")
 }
 
 // AddServerFlags adds the flags for the "server" subcommand.
@@ -156,6 +165,11 @@ func (f *Flags) AddToolFlags(flags *pflag.FlagSet) {
 // Config returns the internal config populated from the parsed flags.
 func (f *Flags) Config() (*config.Config, error) {
 	emailDomains, err := config.ParseEmailDomains(f.OIDCEmailDomains)
+	if err != nil {
+		return nil, err
+	}
+
+	usageWindow, err := config.ParseUsageWindow(f.UsageWindow)
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +194,8 @@ func (f *Flags) Config() (*config.Config, error) {
 		OIDCEmailDomains: emailDomains,
 
 		OIDCCallbackURL: f.OIDCCallbackURL,
+
+		UsageWindow: usageWindow,
 	}, nil
 }
 
