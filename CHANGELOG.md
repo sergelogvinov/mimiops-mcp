@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.4.0...v0.5.0) (2026-09-30)
+
+
+### Features
+
+* add resource usage metrics for workloads, jobs, and cronjobs ([3ef58e7](https://github.com/sergelogvinov/mimiops-mcp/commit/3ef58e7559b3e12c11b63387f43f0fb7823fd6d1))
+* more sanitize patterns ([e1ba863](https://github.com/sergelogvinov/mimiops-mcp/commit/e1ba863ee64d292bc2052ceb21a2f413b6e581e5))
+
+
+### Bug Fixes
+
+* gh actions ([fd53991](https://github.com/sergelogvinov/mimiops-mcp/commit/fd53991a5570368ba7a079f3f946206313186b56))
+
 ## [0.4.0](https://github.com/sergelogvinov/mimiops-mcp/compare/v0.3.0...v0.4.0) (2026-08-30)
 
 
