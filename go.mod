@@ -6,8 +6,8 @@ require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/fluxcd/helm-controller/api v1.6.4
 	github.com/fluxcd/kustomize-controller/api v1.9.5
-	github.com/fluxcd/pkg/apis/meta v1.31.0
-	github.com/fluxcd/source-controller/api v1.9.4
+	github.com/fluxcd/pkg/apis/meta v1.32.0
+	github.com/fluxcd/source-controller/api v1.9.5
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/mark3labs/mcp-go v0.58.0
 	github.com/spf13/cobra v1.10.2
@@ -15,7 +15,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	helm.sh/helm/v4 v4.2.4
 	k8s.io/api v0.36.4
-	k8s.io/apimachinery v0.36.4
+	k8s.io/apimachinery v0.37.0
 	k8s.io/cli-runtime v0.36.4
 	k8s.io/client-go v0.36.4
 	k8s.io/metrics v0.36.4
