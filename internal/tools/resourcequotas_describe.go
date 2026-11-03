@@ -102,13 +102,11 @@ func handlerResourceQuotasDescribe(mc *k8s.MultiClusterClient) func(ctx context.
 // buildResourceQuotaDescribeResult builds a ResourceQuotaDescribeResult from a ResourceQuota.
 func buildResourceQuotaDescribeResult(quota *corev1.ResourceQuota) *ResourceQuotaDescribeResult {
 	result := ResourceQuotaDescribeResult{
-		Annotations: extractAnnotations(quota.Annotations),
-		Labels:      extractLabels(quota.Labels),
-		ResourceQuotaSummary: ResourceQuotaSummary{
-			Name:      quota.Name,
-			Namespace: quota.Namespace,
-			Age:       age.FormatAge(quota.CreationTimestamp),
-		},
+		Annotations:    extractAnnotations(quota.Annotations),
+		Labels:         extractLabels(quota.Labels),
+		Name:           quota.Name,
+		Namespace:      quota.Namespace,
+		Age:            age.FormatAge(quota.CreationTimestamp),
 		ResourceQuotas: extractResourceQuotas(quota),
 	}
 

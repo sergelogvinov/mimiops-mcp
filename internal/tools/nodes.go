@@ -37,11 +37,9 @@ func toNodeSummary(node *corev1.Node) NodeSummary {
 		KubeletVersion: node.Status.NodeInfo.KubeletVersion,
 		ImageVersion:   node.Status.NodeInfo.OSImage,
 		InternalIPs:    strings.Join([]string{ips}, ","),
-		NodeCapacityInfo: NodeCapacityInfo{
-			CPU:    node.Status.Capacity.Cpu().String(),
-			Memory: node.Status.Capacity.Memory().String(),
-			Pods:   int(node.Status.Capacity.Pods().Value()),
-		},
+		CPU:            node.Status.Capacity.Cpu().String(),
+		Memory:         node.Status.Capacity.Memory().String(),
+		Pods:           int(node.Status.Capacity.Pods().Value()),
 	}
 }
 

@@ -50,14 +50,12 @@ func toCronJobSpec(cj *batchv1.CronJob) CronJobSpec {
 	spec := CronJobSpec{
 		ConcurrencyPolicy: string(cj.Spec.ConcurrencyPolicy),
 		Selector:          formatMatchLabels(cj.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels),
-		PodSpec: PodSpec{
-			RestartPolicy:     string(cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy),
-			ServiceAccount:    cj.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName,
-			PriorityClassName: cj.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName,
-			InitContainers:    toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.InitContainers),
-			Containers:        toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.Containers),
-			Volumes:           extractVolumeNames("", cj.Spec.JobTemplate.Spec.Template.Spec.Volumes),
-		},
+		RestartPolicy:     string(cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy),
+		ServiceAccount:    cj.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName,
+		PriorityClassName: cj.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName,
+		InitContainers:    toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.InitContainers),
+		Containers:        toContainerInfoList(cj.Spec.JobTemplate.Spec.Template.Spec.Containers),
+		Volumes:           extractVolumeNames("", cj.Spec.JobTemplate.Spec.Template.Spec.Volumes),
 	}
 
 	if cj.Spec.StartingDeadlineSeconds != nil {

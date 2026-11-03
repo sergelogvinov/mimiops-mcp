@@ -130,11 +130,9 @@ func handlerNamespacesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Cont
 // ResourceQuotas and LimitRanges.
 func buildNamespaceDescribeResult(ns *corev1.Namespace, quota *corev1.ResourceQuota, limitRange *corev1.LimitRange) *NamespaceDescribeResult {
 	result := &NamespaceDescribeResult{
-		NamespaceSummary: NamespaceSummary{
-			Name:   ns.Name,
-			Status: string(ns.Status.Phase),
-			Age:    age.FormatAge(ns.CreationTimestamp),
-		},
+		Name:        ns.Name,
+		Status:      string(ns.Status.Phase),
+		Age:         age.FormatAge(ns.CreationTimestamp),
 		Annotations: extractAnnotations(ns.Annotations),
 		Labels:      extractLabels(ns.Labels),
 		Finalizers:  ns.Finalizers,
