@@ -135,13 +135,11 @@ func createJobFromCronJob(ctx context.Context, client *k8s.Client, namespace, jo
 
 	// Create a new Job
 	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        jobName,
-			Namespace:   namespace,
-			Labels:      make(map[string]string),
-			Annotations: make(map[string]string),
-		},
-		Spec: jobSpec,
+		Name:        jobName,
+		Namespace:   namespace,
+		Labels:      make(map[string]string),
+		Annotations: make(map[string]string),
+		Spec:        jobSpec,
 	}
 
 	// Copy labels and annotations from CronJob

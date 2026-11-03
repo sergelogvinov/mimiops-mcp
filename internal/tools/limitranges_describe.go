@@ -104,12 +104,10 @@ func handlerLimitRangesDescribe(mc *k8s.MultiClusterClient) func(ctx context.Con
 // buildLimitRangeDescribeResult builds a LimitRangeDescribeResult from a LimitRange.
 func buildLimitRangeDescribeResult(lr *corev1.LimitRange) *LimitRangeDescribeResult {
 	return &LimitRangeDescribeResult{
-		LimitRangeSummary: LimitRangeSummary{
-			Name:      lr.Name,
-			Namespace: lr.Namespace,
-			Types:     deriveLimitRangeTypes(lr),
-			Age:       age.FormatAge(lr.CreationTimestamp),
-		},
+		Name:        lr.Name,
+		Namespace:   lr.Namespace,
+		Types:       deriveLimitRangeTypes(lr),
+		Age:         age.FormatAge(lr.CreationTimestamp),
 		Annotations: extractAnnotations(lr.Annotations),
 		Labels:      extractLabels(lr.Labels),
 		Spec: LimitRangeSpec{

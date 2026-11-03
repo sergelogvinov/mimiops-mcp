@@ -99,18 +99,14 @@ func handlerWorkloadsScale(mc *k8s.MultiClusterClient) func(ctx context.Context,
 		switch kind {
 		case "deployment":
 			_, err = client.AppsV1().Deployments(namespace).UpdateScale(ctx, name, &autoscalingv1.Scale{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: name,
-				},
+				Name: name,
 				Spec: autoscalingv1.ScaleSpec{
 					Replicas: int32(replicas),
 				},
 			}, metav1.UpdateOptions{})
 		case "statefulset":
 			_, err = client.AppsV1().StatefulSets(namespace).UpdateScale(ctx, name, &autoscalingv1.Scale{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: name,
-				},
+				Name: name,
 				Spec: autoscalingv1.ScaleSpec{
 					Replicas: int32(replicas),
 				},

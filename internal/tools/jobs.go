@@ -47,14 +47,12 @@ func toJobSummary(job *batchv1.Job) JobSummary {
 
 func toJobSpec(job *batchv1.Job) JobSpec {
 	spec := JobSpec{
-		PodSpec: PodSpec{
-			RestartPolicy:     string(job.Spec.Template.Spec.RestartPolicy),
-			ServiceAccount:    job.Spec.Template.Spec.ServiceAccountName,
-			PriorityClassName: job.Spec.Template.Spec.PriorityClassName,
-			InitContainers:    toContainerInfoList(job.Spec.Template.Spec.InitContainers),
-			Containers:        toContainerInfoList(job.Spec.Template.Spec.Containers),
-			Volumes:           extractVolumeNames("", job.Spec.Template.Spec.Volumes),
-		},
+		RestartPolicy:     string(job.Spec.Template.Spec.RestartPolicy),
+		ServiceAccount:    job.Spec.Template.Spec.ServiceAccountName,
+		PriorityClassName: job.Spec.Template.Spec.PriorityClassName,
+		InitContainers:    toContainerInfoList(job.Spec.Template.Spec.InitContainers),
+		Containers:        toContainerInfoList(job.Spec.Template.Spec.Containers),
+		Volumes:           extractVolumeNames("", job.Spec.Template.Spec.Volumes),
 	}
 
 	if job.Spec.Parallelism != nil {
